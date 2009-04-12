@@ -1,6 +1,7 @@
 #!/bin/bash
 # check.sh - Script to check ports
 # Inspired by check.pl from sdavis
+# v.2 - Switched to $# arg checking, set script variable.
 # v.1 - Initial script
 #
 # Known Issues - Fails on OS X due to netcat being broken on OS X.
@@ -23,10 +24,11 @@
 
 # Ports to check - Change to the ports you'd like to probe
 ports='22 3389 80 443 25 21 23794'
+script=$(basename $0)
 
 # Exit if given control+c
-trap gtfo 2
-gtfo() {
+trap leaveNow 2
+leaveNow() {
 	echo 'Caught SIGINT. Exiting.'
 	exit 1
 }
@@ -72,8 +74,9 @@ verify_ip() {
 }
 
 # Input Validation
-if [ -z $1 ] || [ ! -z $2 ]; then
-	echo -e "$(basename $0) - Script to scan commonly used TCP ports.\nusage: $(basename $0) host" >&2
+if [ $# -ne 1 ]; then
+	echo "$script - Script to scan commonly used TCP ports." >&2
+	echo "usage: $script host" >&2
 	exit 1
 fi
 
