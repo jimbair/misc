@@ -1,12 +1,11 @@
 #!/bin/bash
 #
 # run function to check exit codes
+# v.22 - Added catch for cd (and able to add later as needed)
 # v.21 - Only call echo if non-null response
 # v.2  - Added 127 code support
 #      - Added a few more comments
 # v.1  - Initial Script
-#
-# Known Issues - Does not work with the cd utility
 #
 # Copyright (C) 2008  James Bair <james.d.bair@gmail.com>
 #
@@ -34,6 +33,20 @@ run() {
 	exc=$($@ 2>&1)
 	# Exit Code
 	ec=$(echo $?)
+
+	# Catch any bad commands and print out why it's not good.
+	case $app in
+		# cd built-in doesn't work with this function
+		cd)
+		echo "ERROR: $app is not supported by run()" >&2
+		echo "Exiting." >&2
+		exit 1
+		;;
+
+		# Everything else is fine, proceed.
+		*)
+		;;
+	esac
 
 	# Check our exit code and respond accordingly. 
 	# Simply echo the output if we exit cleanly.
