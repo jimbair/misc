@@ -1,5 +1,7 @@
 #!/bin/bash
 # Script to find your routable IP address.
+# v1.1 - Fixed interface and ipaddy against possible incorrect
+#        responses from ipv6 and *0.0.0.0*
 # v1.0 - Initial script - Stolen from mymac.sh
 #
 # Copyright (C) 2008  James Bair <james.d.bair@gmail.com>
@@ -35,8 +37,8 @@ elif [ "$ifcheck" -eq 127 ]; then
 fi
 
 # Find public interface, then IP address.
-interface=$(netstat -rn |  awk '($1 ~ /0.0.0.0/) {print $8}')
-ipaddy=$(ifconfig $interface | awk '($1 ~ /inet/) {print $2}' | cut -d : -f 2-)
+interface=$(netstat -rn |  awk '($1 ~ /^0.0.0.0$/) {print $8}')
+ipaddy=$(ifconfig $interface | awk '($1 ~ /^inet$/) {print $2}' | cut -d : -f 2-)
 
 if [ -n "$ipaddy" ]; then
 	echo "$ipaddy"
