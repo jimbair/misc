@@ -1,6 +1,15 @@
 #!/bin/bash
 #
 # run function to check exit codes
+#
+# *** NOTICE ***
+# This function DOES NOT WORK when using stdin/stdout/stderr
+#
+# For example:
+#    run gzip -c /home/user/filename.ext > /tmp/filename.ext
+#
+# The above example will fail. 
+#
 # v.22 - Added catch for cd (and able to add later as needed)
 # v.21 - Only call echo if non-null response
 # v.2  - Added 127 code support
