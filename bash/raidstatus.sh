@@ -55,6 +55,12 @@ fi
 # Find our RAID array's controller name, as this changes
 controllerName=$($raidBinary info | awk '( $1 ~ /c[0-9]/ ) { print $1 }')
 
+# Verify we got found at least one controller
+if [ -z "$controllerName" ]; then
+	echo "ERROR: Unable to find our controller name. Exiting." >&2
+	exit 2
+fi
+
 # Go through each RAID controller found
 
 for i in $controllerName; do
