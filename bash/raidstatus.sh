@@ -34,8 +34,8 @@
 
 PATH='/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin'
 
-fromEmail='storage@tsuehpsyde.com'
-toEmail='tsuehpsyde@gmail.com'
+fromEmail='RAIDERROR@yourdomain.com'
+toEmail='yourname@gmail.com'
 raidBinary="/root/bin/tw_cli/tw_cli"
 
 # Make sure tw_cli is present and working
