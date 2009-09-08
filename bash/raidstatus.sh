@@ -71,7 +71,7 @@ for i in $controllerName; do
 	if [ "$RAIDstatus" = "OK" ]; then
 		continue
 	else
-		fullRAID=$($raidBinary /${controllerName} show all)
+		fullRAID=$($raidBinary /${i} show all)
 		# Send the email. This format makes this script ugly but the output to email
 		# is more important. Still, I dislike this. =(
 		echo -e "subject: Storage Array Has Failed!
