@@ -249,7 +249,7 @@ if [ "$OS" == 'rh' ]; then
     chkconfig folding on
     pause 5
     service folding start
-elif [ "$OS" = 'deb' ]; then
+elif [ "$OS" == 'deb' ]; then
     update-rc.d folding defaults
     pause 5
     /etc/init.d/folding start
