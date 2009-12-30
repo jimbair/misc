@@ -8,8 +8,10 @@
 #
 # Set to work with version 6.02 of Folding@Home for Linux
 #
-# v0.2 - Confirmed Working - Needs More Testing
-# v0.1 - Testing/Creation
+# v0.21 - A few syntax changes
+#       - Tabs now spaces
+# v0.2  - Confirmed Working - Needs More Testing
+# v0.1  - Testing/Creation
 #
 # Copyright (C) 2008  James Bair <james.d.bair@gmail.com>
 #
@@ -38,116 +40,119 @@ ramsize=$(free -m | awk '( $1 ~ /Mem:/ ) { print $2 }')
 
 # Timestamp our echos
 echostamp() {
-	echo -e "[`date`] - $@"
+    echo -e "[$(date)] - $@"
 }
 
 # Stuff commands into our screen.
 # Note the ^M after $@. This is a newline created by ctrl+V, ctrl+M.
 # This will break formatting when the file is opened outside of vim.
 stuffit() {
-	screen -p 0 -X -S foldingsetup stuff "${@}" > /dev/null 2>&1
-	if [ $? -eq 0 ]; then
-		echostamp "Sent command '$@' into our screen"
-		# Sleep here to slow down the sequential stuffs
-		pause 1
-	else
-		echostamp "ERROR: Our screen is not present. Exiting." >&2
-		exit 1
-	fi
+    screen -p 0 -X -S foldingsetup stuff "${@}" > /dev/null 2>&1
+    if [ $? -eq 0 ]; then
+        echostamp "Sent command '$@' into our screen"
+        # Sleep here to slow down the sequential stuffs
+        pause 1
+    else
+        echostamp "ERROR: Our screen is not present. Exiting." >&2
+        exit 1
+    fi
 }
 
 # Make our pauses more pretty. =)
 pause() {
-	# Make sure we got proper input
-	if [ -z "$1" ] || [ -n "$2" ]; then
-		echo 'ERROR: Must be called with one numerical variable.' >&2
-		exit 1
-	fi
+    # Make sure we got proper input
+    if [ -z "$1" ] || [ -n "$2" ]; then
+        echo 'ERROR: Must be called with one numerical variable.' >&2
+        exit 1
+    fi
 
-	# Declare our variable
-	num=$1
-	
-	# Ensure we got a number
-	numcheck=$(echo $num | sed '/[^0-9]/d')
-	if [ -z "$numcheck" ]; then
-		echo 'ERROR: Our numerical variable *MUST* be an integer (e.g. 1, 7, 15, etc.)' >&2
-		echo 'Exiting.' >&2
-		exit 1
-	# If we have a number, let's do the deed
-	else
-		echo -n "[`date`] - Pausing for $numcheck seconds"
-		# Print a period and increment down one, go until zero
-		while [ "$numcheck" -gt 0 ]; do
-			# Print with a newline if our last period
-			sleep 1
-			if [ "$numcheck" -ne 1 ]; then
-				echo -n .
-			else
-				echo .
-			fi
-			numcheck=$(($numcheck - 1))
-		done
-	fi
+    # Declare our variable
+    num=$1
+
+    # Ensure we got a number
+    numcheck=$(echo $num | sed '/[^0-9]/d')
+    if [ -z "$numcheck" ]; then
+        echo 'ERROR: Our numerical variable *MUST* be an integer (e.g. 1, 7, 15, etc.)' >&2
+        echo 'Exiting.' >&2
+        exit 1
+    # If we have a number, let's do the deed
+    else
+        echo -n "[$(date)] - Pausing for $numcheck seconds"
+        # Print a period and increment down one, go until zero
+        while [ "$numcheck" -gt 0 ]; do
+            # Print with a newline if our last period
+            sleep 1
+            if [ "$numcheck" -ne 1 ]; then
+                echo -n .
+            else
+                echo .
+            fi
+            numcheck=$(($numcheck - 1))
+        done
+    fi
 }
 
 # Must be root to run this script
 if [ $UID -ne 0 ]; then
-	echostamp 'ERROR: You must be root to run this script. Exiting.' >&2
-	exit 1
+    echostamp 'ERROR: You must be root to run this script. Exiting.' >&2
+    exit 1
 # Exit if arguments are passed since we don't need any.
 elif [ $# -ne 0 ]; then
-	echostamp 'ERROR: This script requires no arguments. Exiting.' >&2
-	exit 1
+    echostamp 'ERROR: This script requires no arguments. Exiting.' >&2
+    exit 1
+# In case $ramsize fails to get generated
+elif [ -z "$ramsize" ]; then
+    echostamp 'ERROR: Unable to find our system memory size. Exiting.' >&2
 fi
 
 # Find which OS we are installing on
 if [ -s /etc/redhat-release ]; then
-	echostamp 'Red Hat based OS detected.'
-	OS='rh'
+    echostamp 'Red Hat based OS detected.'
+    OS='rh'
 elif [ -s /etc/debian_version ]; then
-	echostamp 'Debian based OS detected.'
-	OS='deb'
+    echostamp 'Debian based OS detected.'
+    OS='deb'
 else
-	echostamp 'This OS is not supported by this script. Exiting.' >&2
-	exit 1
+    echostamp 'This OS is not supported by this script. Exiting.' >&2
+    exit 1
 fi
 
 # Create our user and home directory
-echo -n "[`date`] - Creating folding user and directory..."
+echo -n "[$(date)] - Creating folding user and directory..."
 # Add user if needed
 if [ -z "$(grep /var/folding /etc/passwd)" ]; then
-	useradd -d /var/folding -r folding
+    useradd -d /var/folding -r folding
 fi
 # Create directory if needed
 if [ ! -d /var/folding ]; then
-	mkdir /var/folding
-	chown folding.folding /var/folding
+    mkdir /var/folding
+    chown folding.folding /var/folding
 fi
 echo 'done.'
 
 # Download our script - Not mirrored locally since it gets updated by author
-echo -n "[`date`] - Downloading finstall..."
+echo -n "[$(date)] - Downloading finstall..."
 cd /var/folding
 wget -c http://www.vendomar.ee/~ivo/finstall > /dev/null 2>&1
 # Check to see if our download failed
 if [ $? -ne 0 ]; then
-	echostamp 'ERROR: The download of the finstall failed. Exiting.'
-	exit 1
+    echostamp 'ERROR: The download of the finstall failed. Exiting.'
+    exit 1
 else
-	echo 'done!'
+    echo 'done!'
 fi
 
 # Begin setup of screen for script that requires interactive responses
-echo -n "[`date`] - Creating a screen to automate the setup process..."
+echo -n "[$(date)] - Creating a screen to automate the setup process..."
 screen -dm foldingsetup
 # Ensure our screen started up properly
 if [ $? -ne 0 ]; then
-	# Put our timestamp on a newline
-	echo
-	echostamp 'ERROR: Unable to create our screen session. Exiting.'
-	exit 1
+    # Put our timestamp on a newline
+    echo
+    echostamp 'ERROR: Unable to create our screen session. Exiting.'
+    exit 1
 else
-	echo 'done!'
+    echo 'done!'
 fi
 
 # Login as folding and run script
@@ -240,21 +245,21 @@ cp foldingathome/folding /etc/init.d/
 chmod 4775 foldingathome/folding
 
 # Setup start @ boot and start service based on OS
-if [ $OS = rh ]; then
-	chkconfig folding on
-	pause 5
-	service folding start
-elif [ $OS = deb ]; then
-	update-rc.d folding defaults
-	pause 5
-	/etc/init.d/folding start
+if [ "$OS" == 'rh' ]; then
+    chkconfig folding on
+    pause 5
+    service folding start
+elif [ "$OS" = 'deb' ]; then
+    update-rc.d folding defaults
+    pause 5
+    /etc/init.d/folding start
 else
-	echostamp 'ERROR: How did we get here? Please investigate.' >&2
-	exit 1
+    echostamp 'ERROR: How did we get here? Please investigate.' >&2
+    exit 1
 fi
 
-echostamp "Service configuration has been completed!"
+echostamp 'Service configuration has been completed!'
 
 # All done
-echostamp "Setup has been completed!"
+echostamp 'Setup has been completed!'
 exit 0
