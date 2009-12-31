@@ -36,7 +36,7 @@ team='75581'
 unitsize='big'
 advmethods='yes'
 # Added since Folding doesn't always see this somehow.
-ramsize=$(free -m | awk '( $1 ~ /Mem:/ ) { print $2 }')
+ramsize="$(free -m | awk '( $1 ~ /Mem:/ ) { print $2 }')"
 
 # Timestamp our echos
 echostamp() {
@@ -61,16 +61,16 @@ stuffit() {
 # Make our pauses more pretty. =)
 pause() {
     # Make sure we got proper input
-    if [ -z "$1" ] || [ -n "$2" ]; then
+    if [ $# -ne 1 ]; then
         echo 'ERROR: Must be called with one numerical variable.' >&2
         exit 1
     fi
 
     # Declare our variable
-    num=$1
+    num="$1"
 
     # Ensure we got a number
-    numcheck=$(echo $num | sed '/[^0-9]/d')
+    numcheck="$(echo $num | sed '/[^0-9]/d')"
     if [ -z "$numcheck" ]; then
         echo 'ERROR: Our numerical variable *MUST* be an integer (e.g. 1, 7, 15, etc.)' >&2
         echo 'Exiting.' >&2
@@ -87,7 +87,7 @@ pause() {
             else
                 echo .
             fi
-            numcheck=$(($numcheck - 1))
+            numcheck="$(($numcheck - 1))"
         done
     fi
 }
