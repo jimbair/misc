@@ -106,6 +106,16 @@ fi
 
 echo -e "\nPassed input validation checks. Checking ports.\n"
 
+# Do a ping test first
+echo -en "  Pinging  ${1}"
+ping -c 1 -w 1 $1 &>/dev/null
+if [ $? -eq 0 ]; then
+	result="${txtgrn}Online"
+else
+	result="${txtred}Offline"
+fi
+echo -e "\t${result}${txtrst}"
+
 # This really needs written using printf since tabs don't always work
 for i in $ports; do
 	echo -en "  Checking ${1}:${i}"
