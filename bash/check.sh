@@ -1,12 +1,10 @@
 #!/bin/bash
 # check.sh - Script to check ports
 # Inspired by check.pl from sdavis
-# v.2 - Switched to $# arg checking, set script variable.
-# v.1 - Initial script
 #
 # Known Issues - Fails on OS X due to netcat being broken on OS X.
 #
-# Copyright (C) 2008  James Bair <james.d.bair@gmail.com>
+# Copyright (C) 2010 James Bair <james.d.bair@gmail.com>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
@@ -24,7 +22,13 @@
 
 # Ports to check - Change to the ports you'd like to probe
 ports='22 3389 80 443 25 21 23794'
-script=$(basename $0)
+script="$(basename $0)"
+
+# Colors are nice.
+# http://wiki.archlinux.org/index.php/Color_Bash_Prompt
+txtred='\e[0;31m' # Red
+txtgrn='\e[0;32m' # Green
+txtrst='\e[0m'    # Text Reset
 
 # Exit if given control+c
 trap leaveNow 2
@@ -101,14 +105,17 @@ else
 fi
 
 echo -e "\nPassed input validation checks. Checking ports.\n"
+
+# This really needs written using printf since tabs don't always work
 for i in $ports; do
 	echo -en "  Checking ${1}:${i}"
 	nc -z -w 1 $1 $i > /dev/null 2>&1
 	if [ $? -eq 0 ]; then
-		echo -e "\tOpen"
+		result="${txtgrn}Open"
 	else
-		echo -e "\tClosed"
+		result="${txtred}Closed"
 	fi
+	echo -e "\t${result}${txtrst}"
 done
 
 # All done!
