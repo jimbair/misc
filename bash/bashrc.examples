@@ -1,0 +1,25 @@
+# The following are examples of code to use in your
+# .bashrc or .bash_profile to make life easier.
+
+# Dynamic setup of server aliases
+# If you have a server named 'backup1' in your ~.ssh/config file
+# it will allow you to simply run 'backup1' to ssh into the system
+# based on your SSH config.
+#
+# Gracefully exits if no file or results found.
+sshConfig='.ssh/config'
+if [ -s "${sshConfig}" ]; then
+    hosts="$(egrep -i '^host ' ${sshConfig} | cut -d ' ' -f 2)"
+    if [ -n "${hosts}" ]; then
+        temp="$(mktemp)"
+        if [ -z "${temp}" ]; then
+            echo "mktemp utility is missing." >&2
+            exit 1
+        fi
+        for host in ${hosts}; do
+            echo alias ${host}=\'ssh ${host}\' >> ${temp}
+        done
+        source ${temp}
+        rm -f ${temp}
+    fi
+fi
