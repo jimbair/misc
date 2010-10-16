@@ -22,6 +22,8 @@
 
 # Ports to check - Change to the ports you'd like to probe
 ports='22 3389 80 443 25 21 23794'
+# Timeout in seconds
+timeout='1'
 script="$(basename $0)"
 
 # Colors are nice.
@@ -106,9 +108,26 @@ fi
 
 echo -e "\nPassed input validation checks. Checking ports.\n"
 
+# Find how much padding we have to do
+for port in $ports; do
+    ourLen="${#port}"
+    if [ -z "${len}" ]; then
+        len="$ourLen"
+    else
+       if [ "${len}" -lt "${ourLen}" ]; then
+           len="${ourLen}"
+       fi
+    fi
+done
+
 # Do a ping test first
-echo -en "  Pinging  ${1}"
-ping -c 1 -w 1 $1 &>/dev/null
+echo -en "  Pinging  ${1} " # Trailing space in place of :
+# Pad spaces
+for i in $(seq $len); do
+    echo -n ' '
+done
+
+ping -c 1 -w ${timeout} $1 &>/dev/null
 if [ $? -eq 0 ]; then
 	result="${txtgrn}Online"
 else
@@ -116,10 +135,16 @@ else
 fi
 echo -e "\t${result}${txtrst}"
 
-# This really needs written using printf since tabs don't always work
-for i in $ports; do
-	echo -en "  Checking ${1}:${i}"
-	nc -z -w 1 $1 $i > /dev/null 2>&1
+for port in $ports; do
+	echo -en "  Checking ${1}:${port}"
+    # Pad spaces
+    ourDiff="$((${len}-${#port}))"
+    if [ "${ourDiff}" -gt 0 ]; then
+        for i in $(seq $ourDiff); do
+            echo -n ' '
+        done
+    fi
+	nc -z -w ${timeout} $1 $port > /dev/null 2>&1
 	if [ $? -eq 0 ]; then
 		result="${txtgrn}Open"
 	else
