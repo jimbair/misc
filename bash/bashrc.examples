@@ -23,3 +23,9 @@ if [ -s "${sshConfig}" ]; then
         rm -f ${temp}
     fi
 fi
+
+# Add ~/bin/ into our PATH if it exists
+myBin="${HOME}/bin"
+if [ -d "${myBin}" ]; then
+    PATH="${PATH}:${myBin}"
+fi
