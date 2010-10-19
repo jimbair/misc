@@ -13,7 +13,7 @@ method='iptables'
 
 # Strings to search for. Separate strings by spaces.
 # Strings are not case sensitive.
-ourStrings='myadmin w00tw00t.at.ISC.SANS.DFind'
+ourStrings='myadmin w00tw00t.at.ISC.SANS.DFind fastenv'
 
 # Start up validations
 if [ $UID -ne 0 ]; then
