@@ -84,8 +84,8 @@ for ip in ${allIPs}; do
             echo -e 'done.\n'
         else
             echo 'failed.'
-        echo 'ERROR: iptables failed to add our rule.' >&2
-        exit 1
+            echo 'ERROR: iptables failed to add our rule.' >&2
+            exit 1
         fi
     # Any other methods are unsupported.
     else
