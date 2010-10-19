@@ -21,7 +21,7 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 # Ports to check - Change to the ports you'd like to probe
-ports='22 3389 80 443 25 21 23794'
+ports='22 3389 80 443 25 21'
 # Timeout in seconds
 timeout='1'
 script="$(basename $0)"
@@ -72,7 +72,7 @@ verify_ip() {
         # Has more or less than 4 IP segments
         ERROR=3
     fi
-    # Revert to the original IRS
+    # Revert to the original IFS
     IFS=$oldIFS
     set +f
     # Return our status
