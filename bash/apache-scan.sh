@@ -71,7 +71,7 @@ for ip in ${allIPs}; do
         echo -n "INFO: Adding ${ip} to ${hostsDeny}..."
         echo "ALL: ${ip}" >> ${hostsDeny}
         echo -e 'done.\n'
-	updated='yes'
+        updated='yes'
     # Add the IPs we found into iptables
     elif [ "${method}" == 'iptables' ]; then
 
@@ -84,7 +84,7 @@ for ip in ${allIPs}; do
         iptables -I INPUT -s ${ip} -j DROP &>/dev/null
         if [ $? -eq 0 ]; then
             echo -e 'done.\n'
-	    updated='yes'
+            updated='yes'
         else
             echo 'failed.'
             echo 'ERROR: iptables failed to add our rule.' >&2
@@ -97,10 +97,17 @@ for ip in ${allIPs}; do
     fi
 done
 
-# All done.
-if [ "${updated}" == 'yes' ]; then
-    /etc/init.d/iptables save
-    echo
+# Save our iptables rules if we added anything.
+if [ "${updated}" == 'yes' -a "${method}" == 'iptables' ]; then
+    if [ -s /etc/init.d/iptables ]; then
+        /etc/init.d/iptables save
+        echo
+    else
+        echo "Unable to save iptabes rules." >&2
+        exit 1
+    fi
 fi
+
+# All done.
 echo "INFO: ${prog} finished at $(date)"
 exit 0
