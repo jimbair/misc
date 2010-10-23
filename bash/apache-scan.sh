@@ -5,7 +5,7 @@
 hostsDeny='/etc/hosts.deny'
 prog="$(basename $0)"
 temp="$(mktemp)"
-webError='/var/log/apache2/error_log'
+webFile='/var/log/apache2/access_log'
 
 # Choose your method of choice
 #method='tcpwrappers'
@@ -13,14 +13,14 @@ method='iptables'
 
 # Strings to search for. Separate strings by spaces.
 # Strings are not case sensitive.
-ourStrings='myadmin w00tw00t.at.ISC.SANS.DFind fastenv'
+ourStrings='myadmin w00tw00t.at.ISC.SANS.DFind fastenv GET[[:space:]]http://'
 
 # Start up validations
 if [ $UID -ne 0 ]; then
     echo "ERROR: This script must be run as root." >&2
     exit 1
-elif [ ! -s "${webError}" ]; then
-    echo "ERROR: Our file ${webError} is empty or missing." >&2
+elif [ ! -s "${webFile}" ]; then
+    echo "ERROR: Our file ${webFile} is empty or missing." >&2
     exit 1
 else
     echo "INFO: ${prog} started at $(date)"
@@ -32,8 +32,8 @@ for string in ${ourStrings}; do
 
     # We use awk to avoid any remote injections from attackers.
     # Also the IP check is okay, but not great.
-    ourIPs="$(grep -i ${string} ${webError} | awk '{print $8}' | \
-    cut -d ']' -f -1 | grep -o '[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*' | sort -u)"
+    ourIPs="$(egrep -i ${string} ${webFile} | awk '{print $1}' | \
+    grep -o '[0-9]*\.[0-9]*\.[0-9]*\.[0-9]*' | sort -u)"
 
     echo 'done.'
 
