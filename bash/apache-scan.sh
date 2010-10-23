@@ -6,6 +6,7 @@ hostsDeny='/etc/hosts.deny'
 prog="$(basename $0)"
 temp="$(mktemp)"
 webFile='/var/log/apache2/access_log'
+updated='no'
 
 # Choose your method of choice
 #method='tcpwrappers'
@@ -70,6 +71,7 @@ for ip in ${allIPs}; do
         echo -n "INFO: Adding ${ip} to ${hostsDeny}..."
         echo "ALL: ${ip}" >> ${hostsDeny}
         echo -e 'done.\n'
+	updated='yes'
     # Add the IPs we found into iptables
     elif [ "${method}" == 'iptables' ]; then
 
@@ -82,6 +84,7 @@ for ip in ${allIPs}; do
         iptables -I INPUT -s ${ip} -j DROP &>/dev/null
         if [ $? -eq 0 ]; then
             echo -e 'done.\n'
+	    updated='yes'
         else
             echo 'failed.'
             echo 'ERROR: iptables failed to add our rule.' >&2
@@ -95,5 +98,9 @@ for ip in ${allIPs}; do
 done
 
 # All done.
+if [ "${updated}" == 'yes' ]; then
+    /etc/init.d/iptables save
+    echo
+fi
 echo "INFO: ${prog} finished at $(date)"
 exit 0
