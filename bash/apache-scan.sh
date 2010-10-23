@@ -99,7 +99,7 @@ done
 
 # Save our iptables rules if we added anything.
 if [ "${updated}" == 'yes' -a "${method}" == 'iptables' ]; then
-    if [ -s /etc/init.d/iptables ]; then
+    if [ -x /etc/init.d/iptables ]; then
         /etc/init.d/iptables save
         echo
     else
