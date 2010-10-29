@@ -52,6 +52,9 @@ for url in $(wget -O- ${page} 2>/dev/null | \
         rm -f ${temp}
     fi
 
+    # Remove any trailing spaces.
+    url="$(echo ${url} | sed s/${filename}%20/${filename}/)"
+
     # Fetch our PwnageTool File
     wget ${url} -O ${temp} # Leave status so user can watch.
     ec="$?"
