@@ -19,7 +19,7 @@ trap leave 2
 
 # Check for script dependencies
 echo -n "Checking for dependencies..."
-for prog in wget md5sum awk mktemp basename; do
+for prog in wget md5sum sed awk mktemp basename; do
     ${prog} --- &>/dev/null
     if [ "$?" -eq 127 ]; then
         echo 'failed.'
