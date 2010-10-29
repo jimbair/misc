@@ -48,7 +48,7 @@ for url in $(wget -O- ${page} 2>/dev/null | \
              grep "${filename}\"" | cut -d '"' -f 2 ); do
 
     # If our file is here, remove it.
-    if [ ! -s "${temp}" ]; then
+    if [ -s "${temp}" ]; then
         rm -f ${temp}
     fi
 
