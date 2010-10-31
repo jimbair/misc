@@ -19,7 +19,16 @@ trap leave 2
 
 # Check for script dependencies
 echo -n "Checking for dependencies..."
-for prog in wget md5sum sed awk mktemp basename; do
+
+# Seperate check for mktemp
+if [ -z "${temp}" -o -z ${results} ]; then
+    echo 'failed.'
+    echo 'Unable to create our temp files. Check mktemp.' >&2
+    exit 1
+fi
+
+# Check other apps
+for prog in wget md5sum sed awk basename; do
     ${prog} --- &>/dev/null
     if [ "$?" -eq 127 ]; then
         echo 'failed.'
@@ -27,6 +36,7 @@ for prog in wget md5sum sed awk mktemp basename; do
         exit 1
     fi
 done
+
 echo -e 'done.\n'
 
 # Create our results header
