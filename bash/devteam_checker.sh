@@ -5,8 +5,8 @@
 filename='PwnageTool_4.1.2.dmg'
 page='http://blog.iphone-dev.org/post/1359246784/20102010-event'
 sum='e8f4d590c8fe62386844d6a2248ae609'
-temp="$(mktemp)"
-results="$(mktemp)"
+temp="$(mktemp 2>/dev/null)"
+results="$(mktemp 2>/dev/null)"
 
 # Clean up after ourselves if killed.
 leave() {
@@ -21,7 +21,7 @@ trap leave 2
 echo -n "Checking for dependencies..."
 
 # Seperate check for mktemp
-if [ -z "${temp}" -o -z ${results} ]; then
+if [ -z "${temp}" -o -z "${results}" ]; then
     echo 'failed.'
     echo 'Unable to create our temp files. Check mktemp.' >&2
     exit 1
