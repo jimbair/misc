@@ -2,7 +2,7 @@
 # check.sh - Script to check ports
 # Inspired by check.pl from sdavis
 #
-# Known Issues - Fails on OS X due to netcat being broken on OS X.
+# Known Issues - Fails on netcat on OS X 10.5+
 #
 # Copyright (C) 2010 James Bair <james.d.bair@gmail.com>
 #
@@ -19,6 +19,8 @@
 # You should have received a copy of the GNU General Public License
 # along with this program; if not, write to the Free Software Foundation,
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
+
+debug=''
 
 # Ports to check - Change to the ports you'd like to probe
 ports='22 3389 80 443 25 21'
@@ -90,24 +92,31 @@ verify_ip "$1"
 
 # 0 means we got a valid IP
 if [ $? -eq 0 ]; then
-    echo -e "\nValid IP found! Proceeding with port check."
+    if [ -n "${debug}" ]; then
+        echo -e "\nValid IP found! Proceeding with port check."
+    fi
 # 1 means non-numeric OR empty. Run host against it.
 elif [ $? -eq 1 ]; then
-    echo -e "\nChecking if hostname given is a valid hostname."
+    if [ -n "${debug}" ]; then
+        echo -e "\nChecking if hostname given is a valid hostname."
+    fi
     host $1 > /dev/null 2>&1
     if [ $? -ne 0 ]; then
         echo 'ERROR: Invalid IP/Host given. Exiting.' >&2
         exit 1
     else
-        echo 'Valid hostname found! Proceeding with port check.'
+        if [ -n "${debug}" ]; then
+            echo 'Valid hostname found! Proceeding with port check.'
+        fi
     fi
 else
     echo -e "\nInvalid IP address given! Exiting." >&2
     exit 1
 fi
 
-echo -e "\nPassed input validation checks. Checking ports.\n"
-
+if [ -n "${debug}" ]; then
+    echo -e "\nPassed input validation checks. Checking ports.\n"
+fi
 # Find how much padding we have to do
 for port in $ports; do
     ourLen="${#port}"
