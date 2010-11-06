@@ -114,9 +114,9 @@ else
     exit 1
 fi
 
-if [ -n "${debug}" ]; then
-    echo -e "\nPassed input validation checks. Checking ports.\n"
-fi
+# Let's get to work. =)
+echo -e "\nPassed input validation checks. Checking ports.\n"
+
 # Find how much padding we have to do
 for port in $ports; do
     ourLen="${#port}"
