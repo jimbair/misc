@@ -21,12 +21,12 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 debug=''
-
-# Ports to check - Change to the ports you'd like to probe
-ports='22 3389 80 443 25 21'
-# Timeout in seconds
-timeout='1'
 script="$(basename $0)"
+services='/etc/services'
+
+# Ports to check and our timeout in seconds
+ports='22 3389 80 443 25 21'
+timeout='1'
 
 # Colors are nice.
 # http://wiki.archlinux.org/index.php/Color_Bash_Prompt
@@ -119,6 +119,16 @@ echo -e "\nPassed input validation checks. Checking ports.\n"
 
 # Find how much padding we have to do
 for port in $ports; do
+
+    # Check for ports in services
+    if [ -s "${services}" ]; then
+        pname="$(egrep "	${port}/tcp" ${services} | awk '{print $1}')"
+        if [ -n "${pname}" ]; then
+            port="${port} (${pname})"
+        fi
+    fi
+
+    # Find our string length and compare to others
     ourLen="${#port}"
     if [ -z "${len}" ]; then
         len="$ourLen"
@@ -127,6 +137,7 @@ for port in $ports; do
            len="${ourLen}"
        fi
     fi
+
 done
 
 # Do a ping test first
@@ -145,6 +156,15 @@ fi
 echo -e "\t\t${result}${txtrst}"
 
 for port in $ports; do
+
+    # Check for ports in services
+    if [ -s "${services}" ]; then
+        pname="$(egrep "	${port}/tcp" ${services} | awk '{print $1}')"
+        if [ -n "${pname}" ]; then
+            port="${port} (${pname})"
+        fi
+    fi
+
     echo -en "  Checking ${1}:${port}"
     # Pad spaces
     ourDiff="$((${len}-${#port}))"
