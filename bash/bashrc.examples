@@ -7,7 +7,7 @@
 # based on your SSH config.
 #
 # Gracefully exits if no file or results found.
-sshConfig='.ssh/config'
+sshConfig="${HOME}/.ssh/config"
 if [ -s "${sshConfig}" ]; then
     hosts="$(egrep -i '^host ' ${sshConfig} | cut -d ' ' -f 2)"
     if [ -n "${hosts}" ]; then
