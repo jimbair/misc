@@ -34,5 +34,5 @@ if __name__ == '__main__':
         sys.stderr.write('Unable to find our CloudKick IPs.\n')
         sys.exit(1)
     else:
-        print ' \n'.join(ips)
+        print '\n'.join(ips)
         sys.exit(0)
