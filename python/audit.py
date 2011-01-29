@@ -2,11 +2,13 @@
 # A script to audit a Gentoo server for all pertinent information.
 
 import commands
+import glob
 import os
+import socket
 import sys
 
 # Where we save out output to
-logFile = 'output.txt'
+logFile = '%s.output.txt' % (socket.gethostname(),)
 
 # The system commands we run
 ourCommands = ( 'w',
@@ -62,6 +64,39 @@ def main(logFile):
     # but I want the output wrapper the same as with commands.
     for item in etcFiles:
         comWrapper('cat /etc/%s' % (item,), logFile)
+
+    # Find the users in the cron group
+    for line in file('/etc/group', 'r').readlines():
+        if 'cron:x:' in line:
+            # Remove the newline, grab the users and
+            # break them into an array.
+            line = line.strip()
+            usersData = line.split(':')[-1]
+            users = usersData.split(',')
+            break
+
+    # Print out their crontab if applicable
+    for user in users:
+        comWrapper('crontab -l -u %s' % (user,),logFile)
+
+    # Find all our file based cron entries
+    cronItems = glob.glob('/etc/cron*')
+    for item in cronItems:
+        # If it's a file, print it's contents
+        if os.path.isfile(item):
+            comWrapper('cat %s' % (item,), logFile)
+        # If it's a directory, dig in deeper and find the files
+        elif os.path.isdir(item):
+            cronFiles = os.listdir(item)
+            for ourFile in cronFiles:
+	        # Add the path to the file.
+                ourFile = '%s/%s' % (item, ourFile)
+		# Ignore .keep files
+                if '.keep' in ourFile:
+                    continue
+		# If a file, do the deed.
+                if os.path.isfile(ourFile):
+                    comWrapper('cat %s' % (ourFile,), logFile)
 
     # Find our eselect modules and list their info
     esData = commands.getoutput('eselect modules list')
