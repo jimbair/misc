@@ -2,13 +2,11 @@
 # A script to audit a Gentoo server for all pertinent information.
 
 import commands
-import glob
 import os
-import socket
 import sys
 
-# Where we save out output to
-logFile = '%s.output.txt' % (socket.gethostname(),)
+from glob import glob
+from socket import gethostname
 
 # The system commands we run
 ourCommands = ( 'w',
@@ -80,7 +78,7 @@ def main(logFile):
         comWrapper('crontab -l -u %s' % (user,),logFile)
 
     # Find all our file based cron entries
-    cronItems = glob.glob('/etc/cron*')
+    cronItems = glob('/etc/cron*')
     for item in cronItems:
         # If it's a file, print it's contents
         if os.path.isfile(item):
@@ -117,6 +115,10 @@ def main(logFile):
 
 # Main
 if __name__ == '__main__':
+
+    # Where we save out output to
+    logFile = '%s.output.txt' % (gethostname(),)
+
     if not os.path.isfile(logFile):
         main(logFile)
         sys.exit(0)
