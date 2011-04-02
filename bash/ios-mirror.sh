@@ -7,7 +7,7 @@ mirrorList='http://ax.phobos.apple.com.edgesuite.net/WebObjects/MZStore.woa/wa/c
 for url in $(curl --silent "${mirrorList}" | grep 'Restore' | grep '.ipsw' | grep -v 'protected://' | cut -d '>' -f 2- | cut -d '<' -f -1); do
 
     # Find the filename using awk
-    filename="$(echo "${url}" | awk 'BEGIN { FS = "/" } ; { print $NF }')"
+    filename="$(echo "${url}" | awk -F '/' '{print $NF}')"
     # If we have it, skip.
     if [ -s "${filename}" ]; then
         echo "Skipping $filename - already exists."
