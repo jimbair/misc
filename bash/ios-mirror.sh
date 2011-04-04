@@ -20,13 +20,13 @@ checkAndFetch() {
 }
 
 # Find each URL to the IPSW files on TheiPhoneWiki.
-echo 'Beginning sync from the iPhone Wiki List:'
+echo "Beginning sync from the iPhone Wiki's list:"
 for url in $(curl --silent "${ipwList}"  | grep 'Restore.ipsw' | cut -d '"' -f 2); do
     checkAndFetch "${url}"
 done
 
 # Find each URL to the IPSW files on Apple's list.
-echo "Beginnings sync from Apple's list:"
+echo "Beginning sync from Apple's list:"
 for url in $(curl --silent "${appleList}" | grep 'Restore.ipsw' | grep 'http://' | cut -d '>' -f 2 | cut -d '<' -f 1 | sort -u); do
     checkAndFetch "${url}"
 done
