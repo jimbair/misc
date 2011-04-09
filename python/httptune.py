@@ -137,7 +137,6 @@ def findSystemMemory():
 
 def main():
 
-
     checkIfSupported()
 
     apacheMemPercent = findApacheMem(findProcesses())
