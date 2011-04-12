@@ -31,7 +31,9 @@ def checkIfSupported():
 
     prog = os.path.basename(__file__)
     supported = True
-    supportList = ( 'Red Hat Enterprise Linux Server release 5', 'CentOS release 5')
+    supportList = ( 'Red Hat Enterprise Linux Server release 5',
+                    'CentOS release 5',
+                    'Red Hat Enterprise Linux ES release 4 ' )
 
     if os.path.isfile('/etc/redhat-release'):
         for item in supportList:
