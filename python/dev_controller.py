@@ -40,7 +40,7 @@ def findDeviceController(device):
         last = item
 
     # Essentially strip off the first 0's of our string.
-    pciCode = ':'.join(old.split(':')[1:])
+    pciCode = ':'.join(last.split(':')[1:])
 
     # Find our devices/PCI codes
     status, out = commands.getstatusoutput('lspci')
