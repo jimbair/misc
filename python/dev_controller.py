@@ -17,9 +17,20 @@ def findDeviceController(device):
     if not os.path.islink(devLink):
         return False
 
-    # Have fun looking at that one, lol
+    # Have fun looking at this one, lol
     rawInfo = os.path.realpath(devLink)
-    pciCode = ':'.join(rawInfo.split('/')[4].split(':')[1:])
+    old = None
+    for item in rawInfo.split('/'):
+        if old is None:
+            old = item
+            continue
+
+        if 'host' in item:
+            break
+
+        old = item
+
+    pciCode = ':'.join(old.split(':')[1:])
 
     # Now find the matching device to the PCI code
     status, out = commands.getstatusoutput('lspci')
