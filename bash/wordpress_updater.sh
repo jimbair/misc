@@ -38,7 +38,7 @@ for target in ${targets}; do
     ourFolder="${base}${target}/"
     cp -r * ${ourFolder}
     if [ $? -ne 0 ]; then
-        echo "Update for $ourFolder failed."
+        echo "Update for $ourFolder failed." >&2
         exit 1
     else
         echo "Updated $ourFolder successfully."
