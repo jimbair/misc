@@ -15,12 +15,23 @@ def findDeviceController(device):
     Depends on lspci being installed on the system.
     """
 
-    devLink = '/sys/block/' + device.split('/')[-1]
+    # Debian
+    if os.path.isfile('/etc/debian_version'):
+        devLink = '/sys/block/' + device.split('/')[-1]
+    # Red Hat
+    elif os.path.isfile('/etc/redhat-release'):
+        devLink = '/sys/block/%s/device' % (device.split('/')[-1],)
+    # Everything else
+    else:
+        msg = 'Error: Unsupported Linux platform.\n'
+        sys.stderr.write(msg)
+        sys.exit(1)
 
+    # Make sure our dev symlink is a symlink
     if not os.path.islink(devLink):
         return False
 
-    # Have fun looking at this one, lol
+    # Find where our symlink points to
     rawInfo = os.path.realpath(devLink)
 
     # Find the last controller. The last controller is the last entry
