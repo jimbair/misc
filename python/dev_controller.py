@@ -7,6 +7,7 @@
 import commands
 import glob
 import os
+import stat
 import sys
 
 def findDeviceController(device):
@@ -60,12 +61,12 @@ def findDeviceController(device):
         sys.stderr.write(msg)
         sys.exit(1)
 
-    # Now find the matching device to the PCI code
+    # Now find the matching device to the PCI code.
     for line in out.split('\n'):
         if pciCode in line:
             return line.split(':')[2].strip()
 
-    # Something went wrong and our PCI code is invalid
+    # Something went wrong and our PCI code is invalid.
     return None
 
 def main():
@@ -73,14 +74,14 @@ def main():
     Our main function for dev_controller.py
     """
 
-    # Only supported on Linux
+    # Only supported on Linux.
     if sys.platform != 'linux2':
         msg = 'Error: This platform is unsupported.\n'
         msg += 'Supported platforms: Linux\n'
         sys.stderr.write(msg)
         sys.exit(1)
 
-    # Find our block devices
+    # Find our block devices.
     devices = glob.glob('/dev/[s|h]d[a-z]')
 
     # Make sure we found something.
@@ -89,7 +90,13 @@ def main():
         sys.stderr.write(msg)
         sys.exit(1)
 
-    # Sort our devices alphabetically
+    # Make sure we find block devices.
+    for device in devices:
+        mode = os.stat(device)[stat.ST_MODE]
+        if not stat.S_ISBLK(mode):
+            devices.remove(device)
+
+    # Sort our devices alphabetically.
     devices.sort()
 
     # Print out our results. Should handle findDeviceController()
