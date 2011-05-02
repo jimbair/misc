@@ -61,6 +61,20 @@ def findProcesses():
 
     return out
 
+def findApache(processes):
+    """
+    Find the number of apache processes on the system currently.
+    """
+
+    lines = 0
+
+    for line in processes.split('\n'):
+        if '/usr/sbin/httpd' in line:
+            lines += 1
+
+    return lines
+
+
 def findApacheMem(processes):
     """
     Pull out the memory usage from the process list passed
@@ -141,20 +155,32 @@ def main():
 
     checkIfSupported()
 
-    apacheMemPercent = findApacheMem(findProcesses())
+    processes = findProcesses()
+
+    apacheCount = findApache(processes)
+    apacheMemPercent = findApacheMem(processes)
     if apacheMemPercent is None:
         print "Apache is not running or we can't find it's processes."
         sys.exit(1)
 
     pfInfo = findPreforkInfo('/etc/httpd/conf/httpd.conf')
     ourRAM = findSystemMemory()
-    apacheMem = ourRAM * (apacheMemPercent / 100)
-    footprint = int(pfInfo['MaxClients'] * apacheMem)
+    apacheMemAvg = ourRAM * (apacheMemPercent / 100)
+    footprint = int(pfInfo['MaxClients'] * apacheMemAvg)
+    apacheMem = apacheMemAvg * apacheCount
+    suggestedMaxClients = int(ourRAM / apacheMemAvg)
 
-    msg = 'System RAM: %s MB\n' % (ourRAM,)
+    msg = '\n'
+    msg += 'System Configuration:\n'
+    msg += 'System RAM: %s MB\n' % (ourRAM,)
     msg += 'Apache MaxClients: %d\n' % (pfInfo['MaxClients'],)
-    msg += 'Apache Memory Usage: %s MB (average)\n' % (int(apacheMem))
-    msg += 'Apache Maximum Footprint: %s MB\n' % (footprint,)
+    msg += '\nSystem Info:\n'
+    msg += 'Apache Processes: %d\n' % (apacheCount,)
+    msg += 'Apache Memory Usage: %d MB (average)\n' % (int(apacheMemAvg))
+    msg += 'Apache Current Footprint: %d MB\n' % (apacheMem,)
+    msg += 'Apache Maximum Footprint: %d MB\n' % (footprint,)
+    msg += 'Suggested MaxClients: %d\n' % (suggestedMaxClients,)
+    msg += '\n'
     sys.stdout.write(msg)
     sys.exit(0)
 
