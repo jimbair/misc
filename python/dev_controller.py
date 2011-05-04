@@ -121,17 +121,27 @@ def main():
     # Sort our devices alphabetically.
     devices.sort()
 
-    # Print out our results. Should handle findDeviceController()
-    # errors better since now it prints errors in the results.
+    # Print out our results.
     msg = "The following devices and their controllers were found:\n\n"
     sys.stdout.write(msg)
 
+    errors = False
+
     for device in devices:
         controller = findDeviceController(device)
-        msg = "%s is connected to %s\n" % (device, controller)
-        sys.stdout.write(msg)
+        if controller is not None:
+            msg = "%s is connected to %s\n" % (device, controller)
+            sys.stdout.write(msg)
+        else:
+            msg = "Unable to determine controller for %s\n" % (device,)
+            sys.stdout.write(msg)
+            errors = True
 
-    sys.exit(0)
+    # If any controllers not found, exit accordingly.
+    if not errors:
+        sys.exit(0)
+    else:
+        sys.exit(1)
 
 # Main
 if __name__ == '__main__':
