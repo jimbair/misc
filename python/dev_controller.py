@@ -69,6 +69,28 @@ def findDeviceController(device):
     # Something went wrong and our PCI code is invalid.
     return None
 
+def findBlockDevices():
+    """
+    Search the local filesystem for known block devices.
+    Supports: /dev/sdX, /dev/hdX, /dev/cssis/cXdY
+    """
+
+    # Find our block devices. Returns [] if none.
+    results = glob.glob('/dev/[s|h]d[a-z]')
+
+    # HP Server Block Devices
+    hpDevices = glob.glob('/dev/cciss/c[0-9]d[0-9]')
+
+    # If we found any devices, add them in.
+    if hpDevices != []:
+        results = results + hpDevices
+
+    # If we found nothing, return None
+    if results == []:
+        return None
+
+    return results
+
 def main():
     """
     Our main function for dev_controller.py
@@ -82,10 +104,10 @@ def main():
         sys.exit(1)
 
     # Find our block devices.
-    devices = glob.glob('/dev/[s|h]d[a-z]')
+    devices = findBlockDevices()
 
     # Make sure we found something.
-    if devices == []:
+    if devices is None:
         msg = 'Error: No block devices found.\n'
         sys.stderr.write(msg)
         sys.exit(1)
