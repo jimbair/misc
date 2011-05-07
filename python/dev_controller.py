@@ -72,22 +72,40 @@ def findDeviceController(device):
 def findBlockDevices():
     """
     Search the local filesystem for known block devices.
-    Supports: /dev/sdX, /dev/hdX, /dev/cssis/cXdY
+    Supports: /dev/sdX, /dev/hdX, /dev/cssis/cXdY, /dev/emcpowerX
     """
 
-    # Find our block devices. Returns [] if none.
-    results = glob.glob('/dev/[s|h]d[a-z]')
+    results = []
 
-    # HP Server Block Devices
-    hpDevices = glob.glob('/dev/cciss/c[0-9]d[0-9]')
+    # The patters we are looking for:
+    # Typical /dev/sda or /dev/hda type devices
+    patterns = [ '/dev/[s|h]d[a-z]' ]
 
-    # If we found any devices, add them in.
-    if hpDevices != []:
-        results = results + hpDevices
+    # HP Server BLock Devices - /dev/cssis/c0d0
+    patterns.append('/dev/cciss/c[0-9]d[0-9]')
+
+    # EMC HBA Storage Style:
+    patterns.append('/dev/emcpower[a-z]')
+
+    # Search through our patterns for blocks
+    for pattern in patterns:
+
+        # Find our block devices. Returns [] if none.
+        devices = glob.glob(pattern)
+
+        # If anything found, verify it's a block device and add.
+        if devices != []:
+            for device in devices:
+                mode = os.stat(device)[stat.ST_MODE]
+                if stat.S_ISBLK(mode):
+                    results.append(device)
 
     # If we found nothing, return None
     if results == []:
         return None
+
+    # Sort our devices alphabetically.
+    results.sort()
 
     return results
 
@@ -111,15 +129,6 @@ def main():
         msg = 'Error: No block devices found.\n'
         sys.stderr.write(msg)
         sys.exit(1)
-
-    # Make sure we find block devices.
-    for device in devices:
-        mode = os.stat(device)[stat.ST_MODE]
-        if not stat.S_ISBLK(mode):
-            devices.remove(device)
-
-    # Sort our devices alphabetically.
-    devices.sort()
 
     # Print out our results.
     msg = "The following devices and their controllers were found:\n\n"
