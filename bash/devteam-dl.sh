@@ -10,29 +10,45 @@
 url='http://blog.iphone-dev.org/'
 wgetOpts='-o /dev/null -O -'
 
-# redsn0w - fetch everything we can.
-rsURLs="$(wget $wgetOpts $url | grep redsn0w | grep .zip | sort -u | cut -d '?' -f -1 | cut -d '"' -f 2-)"
-if [ -n "${rsURLs}" ]; then
-    for url in ${rsURLs}; do
-        filename="$(echo $url | awk -F '/' '{print $NF}')"
-        wget -O ${filename} ${url}
-        [ ! -s "${filename}" ] && rm -f ${filename}
-    done
-fi
+fetchLatest() {
 
-# PwnageTool - Try one URL at a time until we get a good one.
-ptURLs="$(wget $wgetOpts $url | grep PwnageTool | grep .dmg | cut -d \" -f 2 | grep -v torrent)"
-if [ -n "${ptURLs}" ]; then
-    for url in ${ptURLs}; do
+    done=''
+    for url in $@; do
         filename="$(echo $url | awk -F '/' '{print $NF}')"
+        # Skip this file if we already got it.
+        if [ -n "$(echo ${done} | grep ${filename})" -o -s "${filename}" ]; then
+            continue
+        fi
+        # Make sure it fetched safely
         wget -O ${filename} ${url}
-        if [ ! -s "${filename}" ]; then
+        if [ $? -ne 0 ] || [ ! -s "${filename}" ]; then
             rm -f ${filename}
         else
             sha1sum ${filename}
-            break
+            # Add completed file into our list
+            done="${done} ${filename}"
         fi
     done
+
+}
+
+echo -n "Finding our URLs..."
+rsURLs="$(wget $wgetOpts $url | grep redsn0w | grep .zip | sort -u | cut -d '?' -f -1 | cut -d \" -f 2-)"
+ptURLs="$(wget $wgetOpts $url | grep PwnageTool | grep .dmg | cut -d \" -f 2 | grep -v torrent)"
+echo 'done.'
+
+# redsn0w
+if [ -n "${rsURLs}" ]; then
+    fetchLatest ${rsURLs}
+else
+    echo "No redsn0w URLs found."
+fi
+
+# PwnageTool
+if [ -n "${ptURLs}" ]; then
+    fetchLatest ${ptURLs}
+else
+    echo "No PwnageTool URLs found."
 fi
 
 # All done
