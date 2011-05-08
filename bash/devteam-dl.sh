@@ -1,11 +1,6 @@
 #!/bin/bash
 # Quick script to fetch any new files on the DevTeam blog.
 # Supports downloading redsn0w and PwnageTool currently.
-# Need to be smarter about:
-#  if files already exist.
-#  checking each version of PwnageTool
-#
-# But that's for later I guess. Just wanted to get this into the repo.
 
 url='http://blog.iphone-dev.org/'
 wgetOpts='-o /dev/null -O -'
