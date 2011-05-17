@@ -44,8 +44,8 @@ def findDeviceController(device):
             last = item
             continue
 
-        # If we are on the host, our last item was the winner.
-        if 'host' in item:
+        # If we are on the host or USB, our last item was the winner.
+        if 'host' in item or 'usb' in item:
             break
 
         # If we are here, we haven't hit the host yet.
