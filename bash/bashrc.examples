@@ -11,7 +11,7 @@ sshConfig="${HOME}/.ssh/config"
 if [ -s "${sshConfig}" ]; then
     hosts="$(egrep -i '^host ' ${sshConfig} | cut -d ' ' -f 2)"
     if [ -n "${hosts}" ]; then
-        temp="$(mktemp)"
+        temp="$(mktemp /tmp/temp.XXXXXX)"
         if [ -z "${temp}" ]; then
             echo "mktemp utility is missing." >&2
             exit 1
