@@ -10,12 +10,35 @@ ipwList='http://theiphonewiki.com/wiki/index.php?title=Firmware'
 checkAndFetch() {
     # Find the filename using awk
     filename="$(echo "$1" | awk -F '/' '{print $NF}')"
+    checksum="${filename}.sha1sum"
     # If we have it, skip.
-    if [ -s "${filename}" ]; then
-        echo "Skipping $filename - already exists."
+    if [ -s "${filename}" -a -s "${checksum}" ]; then
+        echo "Skipping ${filename}."
+    # Look for missing checksum
+    elif [ -s "${filename}" -a ! -s "${checksum}" ]; then
+        echo "Checksum file ${checksum} missing. Generating..."
+        shasum ${filename} > ${checksum}
+        if [ $? -eq 0 ]; then
+            echo 'done.'
+        else
+            echo 'failed.' >&2
+            exit 1
+        fi
     # If not, fetch it and sha1sum it locally.
     else
-        wget $url && shasum $filename > $filename.sha1sum
+        wget $1
+        if [ $? -ne 0 ]; then
+            echo "Failed to fetch our file. Aborting." >&2
+            exit 1
+        fi
+        echo -n "Generating ${checksum}..."
+        shasum ${filename} > ${checksum}
+        if [ $? -eq 0 ]; then
+            echo 'done.'
+        else
+            echo 'failed.' >&2
+            exit 1
+        fi
     fi
 }
 
