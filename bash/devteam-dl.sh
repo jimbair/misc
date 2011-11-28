@@ -2,7 +2,10 @@
 # Quick script to fetch any new files on the DevTeam blog.
 # Supports downloading redsn0w and PwnageTool currently.
 
-url='http://blog.iphone-dev.org/redsn0w-iOS5/'
+# Currently using redsn0w beta (tethered)
+#rsURL='http://blog.iphone-dev.org/tagged/redsn0w'
+rsURL='http://blog.iphone-dev.org/redsn0w-iOS5/'
+ptURL='http://blog.iphone-dev.org/tagged/PwnageTool'
 wgetOpts='-o /dev/null -O -'
 
 fetchLatest() {
@@ -28,8 +31,8 @@ fetchLatest() {
 }
 
 echo -n "Finding our URLs..."
-rsURLs="$(wget $wgetOpts $url | grep redsn0w | grep .zip | sort -u | cut -d '?' -f -1 | cut -d \" -f 2-)"
-ptURLs="$(wget $wgetOpts $url | grep PwnageTool | grep .dmg | cut -d \" -f 2 | grep -v torrent)"
+rsURLs="$(wget $wgetOpts $rsURL | grep redsn0w | grep .zip | sort -u | cut -d '?' -f -1 | cut -d \" -f 2-)"
+ptURLs="$(wget $wgetOpts $ptURL | grep PwnageTool | grep .dmg | cut -d \" -f 2 | grep -v torrent)"
 echo 'done.'
 
 # redsn0w
