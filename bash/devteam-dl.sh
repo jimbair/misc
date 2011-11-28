@@ -2,7 +2,7 @@
 # Quick script to fetch any new files on the DevTeam blog.
 # Supports downloading redsn0w and PwnageTool currently.
 
-url='http://blog.iphone-dev.org/'
+url='http://blog.iphone-dev.org/redsn0w-iOS5/'
 wgetOpts='-o /dev/null -O -'
 
 fetchLatest() {
