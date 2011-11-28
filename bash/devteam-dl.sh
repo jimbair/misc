@@ -12,7 +12,7 @@ fetchLatest() {
 
     done=''
     for url in $@; do
-        filename="$(echo $url | awk -F '/' '{print $NF}')"
+        filename="$(echo ${url} | awk -F '/' '{print $NF}')"
         # Skip this file if we already got it.
         if [ -n "$(echo ${done} | grep ${filename})" -o -s "${filename}" ]; then
             continue
@@ -22,7 +22,12 @@ fetchLatest() {
         if [ $? -ne 0 ] || [ ! -s "${filename}" ]; then
             rm -f ${filename}
         else
-            sha1sum ${filename}
+            # Print checksum to stdout to validate. Works on Mac/Linux.
+            platform="$(uname)"
+            if [ "${platform}" == 'Linux' ]; then
+                sha1sum ${filename}
+            elif [ "${platform}" == 'Darwin' ]; then
+                shasum ${filename}
             # Add completed file into our list
             done="${done} ${filename}"
         fi
@@ -31,8 +36,8 @@ fetchLatest() {
 }
 
 echo -n "Finding our URLs..."
-rsURLs="$(wget $wgetOpts $rsURL | grep redsn0w | grep .zip | sort -u | cut -d '?' -f -1 | cut -d \" -f 2-)"
-ptURLs="$(wget $wgetOpts $ptURL | grep PwnageTool | grep .dmg | cut -d \" -f 2 | grep -v torrent)"
+rsURLs="$(wget ${wgetOpts} ${rsURL} | grep redsn0w | grep .zip | sort -u | cut -d '?' -f -1 | cut -d \" -f 2-)"
+ptURLs="$(wget ${wgetOpts} ${ptURL} | grep PwnageTool | grep .dmg | cut -d \" -f 2 | grep -v torrent)"
 echo 'done.'
 
 # redsn0w
