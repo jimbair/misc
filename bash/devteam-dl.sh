@@ -28,6 +28,9 @@ fetchLatest() {
                 sha1sum ${filename}
             elif [ "${platform}" == 'Darwin' ]; then
                 shasum ${filename}
+            else
+                echo "Unsupported platform. Skipping sha1 checksum generation." >&2
+            fi
             # Add completed file into our list
             done="${done} ${filename}"
         fi
