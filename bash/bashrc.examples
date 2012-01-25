@@ -9,7 +9,7 @@
 # Gracefully exits if no file or results found.
 sshConfig="${HOME}/.ssh/config"
 if [ -s "${sshConfig}" ]; then
-    hosts="$(egrep -i '^host ' ${sshConfig} | cut -d ' ' -f 2)"
+    hosts="$(egrep -i '^host ' ${sshConfig} | grep -v '*' | cut -d ' ' -f 2)"
     if [ -n "${hosts}" ]; then
         temp="$(mktemp /tmp/temp.XXXXXX)"
         if [ -z "${temp}" ]; then
