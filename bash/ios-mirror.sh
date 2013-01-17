@@ -3,7 +3,7 @@
 # Uses both the iPhone Wiki as well as Apple's list of restore files.
 
 appleList='http://ax.phobos.apple.com.edgesuite.net/WebObjects/MZStore.woa/wa/com.apple.jingle.appserver.client.MZITunesClientCheck/version'
-ipwList='http://theiphonewiki.com/wiki/index.php?title=Firmware'
+ipswList='http://theiphonewiki.com/wiki/Firmware'
 
 # Check URL and fetch if we don't have the file.
 # Expects a URL to be passed as $1
@@ -44,7 +44,7 @@ checkAndFetch() {
 
 # Find each URL to the IPSW files on TheiPhoneWiki.
 echo "Beginning sync from the iPhone Wiki's list:"
-for url in $(curl --silent "${ipwList}"  | grep 'Restore.ipsw' | cut -d '"' -f 2); do
+for url in $(curl --silent "${ipwList}"  | grep 'Restore.ipsw' | cut -d '"' -f 6); do
     checkAndFetch "${url}"
 done
 
