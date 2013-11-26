@@ -10,7 +10,7 @@ if [ $1 != 'start' ]; then
         if [ $1 != 'status' ]; then
             echo "Usage: $(basename $0) start|stop|status"
             exit 1
-    fi
+        fi
     fi
 fi
 
