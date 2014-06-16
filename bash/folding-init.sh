@@ -3,7 +3,7 @@
 # Built for my needs - expecting ~/folding/ to exist.
 # Validate inputs
 if [ $# -ne 1 ]; then
-    echo "Usage: $(basename $0) start|stop"
+    echo "Usage: $(basename $0) start|stop|status"
     exit 1
 fi
 
