@@ -10,5 +10,7 @@
 # Jim Bair
 
 for host in $(awk '$1=="host" {print $2}' ~/.ssh/config); do
-  rsync -ave ssh --delete-excluded --exclude={"/dev/*","/proc/*","/swapfile","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/mirrors/*","/usr/src/linux**","/usr/portage/*","/var/lib/transmission/Downloads/*","/lost+found"} ${host}:/ /volume1/storage/Jim/Backups/${host}
+  date
+  echo "Running backup for ${host}"
+  rsync -ave ssh --delete-excluded --exclude={"/dev/*","/proc/*","/swapfile","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/mirrors/*","/usr/src/linux*","/usr/portage/*","/var/lib/transmission/Downloads/*","/snap/*","/lost+found"} ${host}:/ /volume1/storage/Jim/Backups/servers/${host}
 done
