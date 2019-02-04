@@ -3,6 +3,12 @@
 # at the firewall as well as config level as required.
 # Hacked together angrily on a Sunday - fairly messy :P 
 
+# Must be run as root
+if [[ ${UID} -ne 0 ]]; then
+  echo "ERROR: Please run this script as root." >&2
+  exit 1
+fi
+
 ipv4=$(host tsue.net | grep 'has address' | awk '{print $NF}')
 ipv6=$(host tsue.net | grep 'has IPv6 address' | awk '{print $NF}' | cut -d ':' -f -4)
 if [[ -z "${ipv4}" ]] || [[ -z "${ipv6}" ]]; then
