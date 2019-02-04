@@ -35,6 +35,7 @@ if [[ "${ipv4}" != "${old4}" ]]; then
   sed -i "s/${old4}/${ipv4}/" ${temp}
   iptables-restore < ${temp}
   [[ $? -ne 0 ]] && echo "ERROR: iptables-restore failed" && exit 3
+  cat ${temp} > /etc/sysconfig/iptables
   rm -f ${temp}
 
   # TODO - Test transmission fix
@@ -46,6 +47,7 @@ if [[ "${ipv4}" != "${old4}" ]]; then
     sed -i "s/${old4}/${ipv4}/" ${transConf}
     [[ $? -ne 0 ]] && echo "ERROR: transmission update failed" && exit 4
     systemctl start transmission-daemon
+  fi
 fi
 
 
@@ -62,6 +64,7 @@ if [[ "${ipv6}" != "${old6}" ]]; then
   sed -i "s/${old6}/${ipv6}/" ${temp}
   ip6tables-restore < ${temp}
   [[ $? -ne 0 ]] && echo "ERROR: iptables-restore failed" && exit 3
+  cat ${temp} > /etc/sysconfig/ip6tables
   rm -f ${temp}
 
 fi
