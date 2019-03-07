@@ -6,11 +6,11 @@
 # case is to backup cloud servers. Dynamically reads the SSH config and runs 
 # rsync across all hosts.
 #
-# v0.1
+# v0.11
 # Jim Bair
 
 for host in $(awk '$1=="host" {print $2}' ~/.ssh/config); do
   date
   echo "Running backup for ${host}"
-  rsync -ave ssh --delete-excluded --exclude={"/dev/*","/proc/*","/swapfile","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/mirrors/*","/usr/src/linux*","/usr/portage/*","/var/lib/transmission/Downloads/*","/snap/*","/lost+found"} ${host}:/ /volume1/storage/Jim/Backups/servers/${host}
+  rsync -ave ssh --no-perms --no-owner --no-group --delete-excluded --exclude={"/dev/*","/proc/*","/swapfile","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/mirrors/*","/usr/src/linux*","/usr/portage/*","/var/lib/transmission/Downloads/*","/snap/*","/lost+found"} ${host}:/ /volume1/storage/Jim/Backups/servers/${host}
 done
