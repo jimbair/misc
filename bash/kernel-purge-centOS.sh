@@ -5,7 +5,7 @@
 # One-liner:
 # for kernel in $(rpm -qa | grep kernel-3); do [[ "${kernel}" == "kernel-$(uname -r)" ]] && continue; yum remove -y ${kernel} $(sed s/kernel/kernel-devel/ <<< ${kernel}); done
 
- for kernel in $(rpm -qa | grep kernel-3); do
+for kernel in $(rpm -qa | grep kernel-3); do
     [[ "${kernel}" == "kernel-$(uname -r)" ]] && continue
     yum remove -y ${kernel} $(sed s/kernel/kernel-devel/ <<< ${kernel})
 done
