@@ -9,6 +9,14 @@ if [[ ${UID} -ne 0 ]]; then
   exit 1
 fi
 
+# We don't fiddle with ufw or firewalld
+which ufw &> /dev/null && ufw_status=$(ufw status | grep 'active')
+which firewall-cmd && firewalld_status=$(firewall-cmd --state | grep 'running')
+if [[ -n "${ufw_status}" -o  -n ${firewalld_status} ]]; then
+  echo "ERROR: This script is only setup to run against iptables directly." >&2
+  exit 1
+fi
+
 ipv4=$(host tsue.net | grep 'has address' | awk '{print $NF}')
 ipv6=$(host tsue.net | grep 'has IPv6 address' | awk '{print $NF}' | cut -d ':' -f -4)
 if [[ -z "${ipv4}" ]] || [[ -z "${ipv6}" ]]; then
