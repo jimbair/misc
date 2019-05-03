@@ -16,8 +16,8 @@ if [[ -z "${ipv4}" ]] || [[ -z "${ipv6}" ]]; then
   exit 1
 fi
 
-old4=$(iptables -L -n | grep '81' | awk '{print $4}')
-old6=$(ip6tables -L -n | grep '81' | awk '{print $3}' | cut -d ':' -f -4)
+old4=$(iptables -L -n | grep 'udp dpt:53$' | awk '{print $4}')
+old6=$(ip6tables -L -n | grep 'udp dpt:53$' | awk '{print $3}' | cut -d ':' -f -4)
 if [[ -z "${old4}" ]] || [[ -z "${old6}" ]]; then
   echo "ERROR: Old IP information is missing. Exiting." >&2
   exit 1
