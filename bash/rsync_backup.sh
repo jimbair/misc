@@ -14,7 +14,7 @@ failures=0
 for host in $(awk '$1=="host" {print $2}' ~/.ssh/config); do
   date
   echo "Running backup for ${host}"
-  rsync -ave ssh --no-perms --no-owner --no-group --delete-excluded --exclude={"/dev/*","/proc/*","/swapfile","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/mirrors/*","/usr/src/linux*","/usr/portage/*","/var/lib/transmission/Downloads/*","/snap/*","/var/lib/plexmediaserver/*","/var/lib/lxcfs/*","/lost+found"} ${host}:/ /volume1/storage/Jim/Backups/servers/${host}
+  rsync -ave ssh --no-perms --no-owner --no-group --delete-excluded --exclude={"/dev/*","/proc/*","/swapfile","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/mirrors/*","/usr/src/linux*","/usr/portage/*","/var/lib/transmission-daemon/downloads/*","/var/lib/transmission/Downloads/*","/snap/*","/var/lib/plexmediaserver/*","/var/lib/lxcfs/*","/lost+found"} ${host}:/ /volume1/storage/Jim/Backups/servers/${host}
   ec=$?
   echo "Backup for ${host} exit code: ${ec}"
   echo
