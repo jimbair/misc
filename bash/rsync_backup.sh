@@ -1,14 +1,17 @@
 #!/bin/bash
-# A basic shell script to rsync sync servers onto our NAS
-# Nothing wild, mostly started with excludes from Arch's wiki and added a few
-# that met my needs. Assumes passwordless keypairs as well as the ~/.ssh/config 
-# files exist. This could be cleaned up a bit to be more robust. My main use 
-# case is to backup cloud servers. Dynamically reads the SSH config and runs 
-# rsync across all hosts.
+# A shell script to rsync sync servers onto our NAS
 #
-# v0.12
+# Nothing wild, it started with excludes from the Arch wiki and I added a few
+# that met our needs. It assumes passwordless keypairs as well as the ~/.ssh/config
+# files exist. Dynamically reads the SSH config and runs rsync across all hosts.
+#
+# v0.2
 # Jim Bair
 
+# For laptops, desktops; anything that's not up all the time
+intermittent='desktop laptop'
+
+# Catch failures from servers that should be up all the time
 failures=0
 
 for host in $(awk '$1=="host" {print $2}' ~/.ssh/config); do
@@ -18,6 +21,7 @@ for host in $(awk '$1=="host" {print $2}' ~/.ssh/config); do
   ec=$?
   echo "Backup for ${host} exit code: ${ec}"
   echo
+  echo ${intermittent} | grep -q ${host} && continue
   [[ "${ec}" -ne 0 ]] && failures=$((failures+1))
 done
 
