@@ -24,7 +24,7 @@ for host in $(awk '$1=="host" {print $2}' ~/.ssh/config); do
   echo -e "Backup for ${host} exit code: ${ec}\n"
 
   # If SSH fails to connect and it's not a server, then move along
-  if [ ${ec} -eq 255]; then
+  if [ ${ec} -eq 255 ]; then
     grep -q ${host} <<< ${intermittent} && continue
   fi
 
