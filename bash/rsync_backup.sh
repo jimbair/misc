@@ -17,8 +17,16 @@ failures=0
 for host in $(awk '$1=="host" {print $2}' ~/.ssh/config); do
 
   date
+  dest="${backupdir}/${host}"
+  echo "Backing up ${host} to ${dest}"
+  [[ -d "${dest}" ]] || mkdir -p ${dest}
+  if [ $? -ne 0 ]; then
+    echo "Creating the missing ${dest} failed. Exiting"
+	exit 1
+  fi
+
   echo "Running backup for ${host}"
-  rsync -ave ssh --no-perms --no-owner --no-group --delete-excluded --exclude={"/dev/*","/proc/*","/swapfile","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/mirrors/*","/usr/src/linux*","/usr/portage/*","/var/lib/transmission-daemon/downloads/*","/var/lib/transmission/Downloads/*","/snap/*","/home/danny/*","/home/jim/.local/share/Steam/*","/home/jim/.cache/*","/home/jim/Downloads/*","/var/lib/plexmediaserver/*","/var/lib/lxcfs/*","/lost+found","/var/db/repos/*","/var/lib/docker/*"} ${host}:/ /volume1/storage/Jim/Backups/servers/${host}
+  rsync -ave ssh --no-perms --no-owner --no-group --delete-excluded --exclude={"/dev/*","/proc/*","/swapfile","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/mirrors/*","/usr/src/linux*","/usr/portage/*","/var/lib/transmission-daemon/downloads/*","/var/lib/transmission/Downloads/*","/snap/*","/home/danny/*","/home/jim/.local/share/Steam/*","/home/jim/.cache/*","/home/jim/Downloads/*","/var/lib/plexmediaserver/*","/var/lib/lxcfs/*","/lost+found","/var/db/repos/*","/var/lib/docker/*"} ${host}:/ ${dest}
   ec=$?
 
   echo -e "Backup for ${host} exit code: ${ec}\n"
