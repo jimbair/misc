@@ -9,12 +9,18 @@
 # Jim Bair
 
 # For laptops, desktops; anything that's not up all the time
-intermittent='desktop laptop'
+intermittent='desk lenovo'
 
 # Catch failures from servers that should be up all the time
 failures=0
 
+backupdir='/volume1/jim/Backups/servers'
+
 for host in $(awk '$1=="host" {print $2}' ~/.ssh/config); do
+
+  # For server names that break bash and
+  # I also have no desire to backup
+  [[ "${host}" == 'let' ]] && continue
 
   date
   dest="${backupdir}/${host}"
