@@ -32,7 +32,7 @@ for host in $(awk '$1=="host" {print $2}' ~/.ssh/config); do
   fi
 
   echo "Running backup for ${host}"
-  rsync -ave ssh --no-perms --no-owner --no-group --delete-excluded --exclude={"/dev/*","/proc/*","/swapfile","/sys/*","/tmp/*","/run/*","/mnt/*","/media/*","/mirrors/*","/usr/src/linux*","/usr/src/kernels/*","/usr/portage/*","/var/lib/flatpak/*","/var/lib/transmission-daemon/downloads/*","/var/lib/transmission/Downloads/*","/snap/*","/home/danny/*","/home/jim/.local/share/Steam/*","/home/jim/.cache/*","/home/jim/Downloads/*","/var/lib/plexmediaserver/*","/var/lib/lxcfs/*","/lost+found","/var/db/repos/*","/var/lib/docker/*","/var/lib/libvirt/images/*"} ${host}:/ ${dest}
+  rsync -ave ssh --no-perms --no-owner --no-group --delete-excluded --exclude-from 'rsync_excludes.txt' ${host}:/ ${dest}
   ec=$?
 
   echo -e "Backup for ${host} exit code: ${ec}\n"
