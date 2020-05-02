@@ -1,5 +1,5 @@
 # Fixes e1000e continuously resetting
-# Lock to a kernel version so test new updates
+# Lock to a kernel version to test new updates
 # 
 # v.01 - May 2nd, 2020
 # Jim Bair
