@@ -10,4 +10,4 @@ gateway_dev=$(ip r | grep ^default | cut -d ' ' -f 5)
 # https://serverfault.com/questions/616485/e1000e-reset-adapter-unexpectedly-detected-hardware-unit-hang
 [[ "$UID" == 0 ]] || exit 1
 [[ -n "${gateway_dev}" ]] || exit 2
-[[ $(uname -r) == "${kernel_release}" ]] && echo ethtool -K ${gateway_dev} gso off gro off tso off
+[[ $(uname -r) == "${kernel_release}" ]] && ethtool -K ${gateway_dev} gso off gro off tso off
