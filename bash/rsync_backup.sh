@@ -54,9 +54,9 @@ fetchLatest() {
   # If SSH fails but it's in our intermittent group, then move along
   if [ ${ec} -eq 255 ]; then
     grep -q ${host} <<< ${intermittent} && continue
-	# If we are still here then we are not in the excludes
+    # If we are still here then we are not in the excludes
     echo "ERROR: unable to login to ${host}"
-	return 1
+    return 1
   # If SSH fails for any other reason
   elif [[ ${ec} -ne 0 ]]; then
     echo "ERROR: unable to login to ${host}"
@@ -64,7 +64,7 @@ fetchLatest() {
   # If we login but we aren't root
   elif [[ "${user}" != 'root' ]]; then
     echo "ERROR: logged into ${host} as ${user} instead of root."
-	return 1
+    return 1
   fi
   
   dest="${backupdir}/${host}"
