@@ -1,5 +1,5 @@
 #!/bin/bash
-# A shell script to rsync sync servers onto our Synology NAS
+# A shell script to backup linux systems via rsync onto our Synology NAS
 #
 # Nothing wild; it started with excludes from the Arch wiki and I added a few
 # that met our needs. Dynamically reads the SSH config and runs rsync across all
