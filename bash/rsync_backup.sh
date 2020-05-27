@@ -41,7 +41,7 @@ fetchLatest() {
   host="$1"
 
   # For server names that break bash
-  [[ "${host}" == 'let' ]] && continue
+  [[ "${host}" == 'let' ]] && return 0
 
   date
 
@@ -53,7 +53,7 @@ fetchLatest() {
 
   # If SSH fails but it's in our intermittent group, then move along
   if [ ${ec} -eq 255 ]; then
-    grep -q ${host} <<< ${intermittent} && continue
+    grep -q ${host} <<< ${intermittent} && return 0
     # If we are still here then we are not in the excludes
     echo "ERROR: unable to login to ${host}"
     return 1
