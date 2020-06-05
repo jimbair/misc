@@ -1,9 +1,14 @@
 # Fixes e1000e continuously resetting
 # Lock to a kernel version to test new updates
 # 
-# v.01 - May 2nd, 2020
+# v.02 - May 2nd, 2020
 # Jim Bair
-kernel_release='4.18.0-193.el8.x86_64'
+
+# root's crontab only has /bin and /usr/bin in RHEL 8.2.0
+PATH='/usr/local/sbin:/sbin:/bin:/usr/sbin:/usr/bin:/root/bin'
+
+# Blacklisting current kernel known to have the bug
+kernel_release='4.18.0-193.1.2.el8_2.x86_64'
 gateway_dev=$(ip r | grep ^default | cut -d ' ' -f 5)
 
 # Make sure we're root, we found our gw device, and disable the bad bits
