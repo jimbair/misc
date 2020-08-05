@@ -13,4 +13,4 @@
 wget -r -A.torrent https://cdimage.debian.org/debian-cd/current/ || exit 1
 
 # Move all the torrents into cd
-find  . -type f -exec mv -t . {} +
+find  . -type f -name '*.torrent' -exec mv '{}' . \;
