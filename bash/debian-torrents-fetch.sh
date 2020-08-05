@@ -14,4 +14,5 @@ wget -r -A.torrent https://cdimage.debian.org/debian-cd/current/ || exit 1
 
 # Move all the torrents into a folder
 mkdir torrents
-find  cdimage.debian.org -type f -name '*.torrent' -exec mv '{}' torrents/ \;
+find cdimage.debian.org -type f -name '*.torrent' -exec mv '{}' torrents/ \; || exit 2
+rm -fr cdimage.debian.org
