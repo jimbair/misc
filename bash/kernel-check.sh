@@ -3,7 +3,7 @@
 liveKernel=$(uname -r)
 bootKernel=$(ls -t /boot/vmlinuz* | grep -v rescue | head -n 1 | cut -d \- -f 2-)
 if [[ "${liveKernel}" != "${bootKernel}" ]]; then
-    echo "Reboot" >&2
+    echo "New Kernel Installed - Please reboot" >&2
     exit 1
 fi
 exit 0
