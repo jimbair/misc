@@ -13,8 +13,8 @@ ALMA="${ROCKY}"
 # Don't forget about 7
 CENTOS7='2009'
 # Ubuntu makes this hard so we scrape the entire releases page and sha1sum it
-# Generated Sep 2nd 2021
-UBUNTU='f4f038ea6e2c2ba1bce6fc92c18e20a416469d5b'
+# Generated Sep 4th 2021
+UBUNTU='71a561d8b1c98f8556bcfbd9f6c80e4fc1799598'
 
 # Run the checks
 curl -s https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || exit 1
@@ -23,7 +23,7 @@ curl -s https://mirror.rackspace.com/centos/8/isos/x86_64/ | grep -q "${CENTOS}"
 curl -s https://download.rockylinux.org/pub/rocky/8/isos/x86_64/ | grep -q "${ROCKY}" || exit 1
 curl -s https://mirror.rackspace.com/almalinux/8/isos/x86_64/ | grep -q "${ALMA}" || exit 1
 curl -s https://mirror.rackspace.com/centos/7/isos/x86_64/ | grep -q "${CENTOS7}" || exit 1
-curl -s https://wiki.ubuntu.com/Releases | sha1sum | grep -q "${UBUNTU}" || exit 1
+curl -s https://wiki.ubuntu.com/Releases | grep e5e5e5 | sha1sum | grep -q "${UBUNTU}" || exit 1
 
 # We made it
 exit 0
