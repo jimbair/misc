@@ -13,8 +13,8 @@ ALMA="${ROCKY}"
 # Don't forget about 7
 CENTOS7='2009'
 # Ubuntu makes this hard so we scrape the torrent tracker and sha1sum it
-# Generated Sep 6th 2021
-UBUNTU='5e304d75e6c39338572f0dea4aa6181fa7804603'
+# Generated Sep 18th 2021
+UBUNTU='67266839265422e035ec50cf613d7a53e91fe5b2'
 
 # Run the checks
 curl -s https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || exit 1
