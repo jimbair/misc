@@ -12,9 +12,8 @@ ROCKY='8.4'
 ALMA="${ROCKY}"
 # Don't forget about 7
 CENTOS7='2009'
-# Ubuntu makes this hard so we scrape the torrent tracker and sha1sum it
-# Generated Oct 15th 2021
-UBUNTU='7c2a96e8579326b868988f328e04df4ae402bcda'
+# Ubuntu makes this hard so we scrape the torrent tracker and diff it
+UBUNTU='/tmp/ubuntu-torrents.txt'
 
 # Run the checks
 curl -s https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || exit 1
@@ -23,7 +22,17 @@ curl -s https://mirror.rackspace.com/centos/8/isos/x86_64/ | grep -q "${CENTOS}"
 curl -s https://download.rockylinux.org/pub/rocky/8/isos/x86_64/ | grep -q "${ROCKY}" || exit 4
 curl -s https://mirror.rackspace.com/almalinux/8/isos/x86_64/ | grep -q "${ALMA}" || exit 5
 curl -s https://mirror.rackspace.com/centos/7/isos/x86_64/ | grep -q "${CENTOS7}" || exit 6
-curl -s https://torrent.ubuntu.com/tracker_index | grep iso | cut -d '>' -f 8 | sha1sum | grep -q "${UBUNTU}" || exit 7
+
+# Create temp file if missing
+if [ ! -s "${UBUNTU}" ]; then
+  curl -s https://torrent.ubuntu.com/tracker_index | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 7
+  exit 0
+fi
+
+# See what has changed in Ubuntu and clean-up if no changes
+curl -s https://torrent.ubuntu.com/tracker_index | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
+diff -q ${UBUNTU} ${UBUNTU}.new > /dev/null || exit 8
+rm -f ${UBUNTU}.new
 
 # We made it
 exit 0
