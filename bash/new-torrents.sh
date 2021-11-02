@@ -4,7 +4,7 @@
 # Checks for release found in current directory
 DEBIAN='11.1.0'
 # Check for next release to show up as there is no current directory to look for
-FEDORA='35'
+FEDORA='36'
 # Checks for release found in current directory
 CENTOS='8.4.2105'
 # Rocky and Alma only do the first two
