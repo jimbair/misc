@@ -9,7 +9,7 @@ FEDORA='36'
 CENTOS='8.4.2105'
 # Rocky and Alma only do the first two
 ROCKY='8.4'
-ALMA="${ROCKY}"
+ALMA='8.5'
 # Don't forget about 7
 CENTOS7='2009'
 # Ubuntu makes this hard so we scrape the torrent tracker and diff it
