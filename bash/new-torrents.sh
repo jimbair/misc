@@ -7,9 +7,8 @@ DEBIAN='11.1.0'
 FEDORA='36'
 # Checks for release found in current directory
 CENTOS='8.4.2105'
-# Alma and Rocky only use the first two numbers
+# Alma only use the first two numbers
 ALMA='8.5'
-ROCKY='8.4'
 # Don't forget about 7
 CENTOS7='2009'
 # Ubuntu makes this hard so we scrape the torrent tracker and diff it
@@ -19,13 +18,12 @@ UBUNTU='/tmp/ubuntu-torrents.txt'
 curl -s https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || exit 1
 curl -s https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && exit 2
 curl -s https://mirror.rackspace.com/centos/8/isos/x86_64/ | grep -q "${CENTOS}" || exit 3
-curl -s https://download.rockylinux.org/pub/rocky/8/isos/x86_64/ | grep -q "${ROCKY}" || exit 4
-curl -s https://mirror.rackspace.com/almalinux/8/isos/x86_64/ | grep -q "${ALMA}" || exit 5
-curl -s https://mirror.rackspace.com/centos/7/isos/x86_64/ | grep -q "${CENTOS7}" || exit 6
+curl -s https://mirror.rackspace.com/almalinux/8/isos/x86_64/ | grep -q "${ALMA}" || exit 4
+curl -s https://mirror.rackspace.com/centos/7/isos/x86_64/ | grep -q "${CENTOS7}" || exit 5
 
 # Create temp file if missing
 if [ ! -s "${UBUNTU}" ]; then
-  curl -s https://torrent.ubuntu.com/tracker_index | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 7
+  curl -s https://torrent.ubuntu.com/tracker_index | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 6
   exit 0
 fi
 
