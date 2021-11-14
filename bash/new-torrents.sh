@@ -29,7 +29,7 @@ fi
 
 # See what has changed in Ubuntu and clean-up if no changes
 curl -s https://torrent.ubuntu.com/tracker_index | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
-diff -q ${UBUNTU} ${UBUNTU}.new > /dev/null || exit 8
+diff -q ${UBUNTU} ${UBUNTU}.new > /dev/null || exit 7
 rm -f ${UBUNTU}.new
 
 # We made it
