@@ -5,7 +5,7 @@
 DEBIAN='11.3.0'
 # Check for next release to show up as there is no current directory to look for
 FEDORA='36'
-# Alma only use the first two numbers
+# Alma only uses the first two numbers
 ALMA='8.5'
 # Don't forget about 7
 CENTOS7='2009'
