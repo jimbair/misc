@@ -25,7 +25,7 @@ if [ ! -s "${UBUNTU}" ]; then
 fi
 
 # See what has changed in Ubuntu and clean-up if no changes
-curl -s https://torrent.ubuntu.com/tracker_index | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
+curl -s https://torrent.ubuntu.com/tracker_index | grep -v beta | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
 diff -q ${UBUNTU} ${UBUNTU}.new > /dev/null || exit 6
 rm -f ${UBUNTU}.new
 
