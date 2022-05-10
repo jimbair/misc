@@ -4,7 +4,7 @@
 # Checks for release found in current directory
 DEBIAN='11.3.0'
 # Check for next release to show up as there is no current directory to look for
-FEDORA='36'
+FEDORA='37'
 # Alma only uses the first two numbers
 ALMA='8.5'
 # Don't forget about 7
