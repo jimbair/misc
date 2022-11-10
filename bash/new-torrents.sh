@@ -6,7 +6,7 @@ DEBIAN='11.5.0'
 # Check for next release to show up as there is no current directory to look for
 FEDORA='37'
 # Alma only uses the first two numbers
-ALMA='8.6'
+ALMA='8.7'
 # Don't forget about 7
 CENTOS7='2009'
 # Ubuntu makes this hard so we scrape the torrent tracker and diff it
