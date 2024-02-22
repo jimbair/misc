@@ -30,7 +30,6 @@ fi
 # See what has changed in Ubuntu and clean-up if no changes
 curl -s https://torrent.ubuntu.com/tracker_index | grep -v beta | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
 diff -q ${UBUNTU} ${UBUNTU}.new > /dev/null || UPDATES="${UPDATES} Ubuntu"
-rm -f ${UBUNTU}.new
 
 # Report which torrents have updates, if any
 if [ -n "${UPDATES}" ]; then
@@ -39,4 +38,5 @@ if [ -n "${UPDATES}" ]; then
 fi
 
 # We made it
+rm -f ${UBUNTU}.new
 exit 0
