@@ -7,8 +7,6 @@ DEBIAN='12.6.0'
 FEDORA='41'
 # Alma only uses the first two
 ALMA='8.10'
-# Don't forget about 7
-CENTOS7='2009'
 # Ubuntu makes this hard so we scrape the torrent tracker and diff it
 UBUNTU='/tmp/ubuntu-torrents.txt'
 
@@ -19,7 +17,6 @@ UPDATES=''
 curl -s https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || UPDATES='Debian'
 curl -s https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && UPDATES="${UPDATES} Fedora"
 curl -s https://mirror.rackspace.com/almalinux/8/isos/x86_64/ | grep -q "${ALMA}" || UPDATES="${UPDATES} Alma 8"
-curl -s https://mirror.rackspace.com/centos/7/isos/x86_64/ | grep -q "${CENTOS7}" || UPDATES="${UPDATES} CentOS 7"
 
 # Create temp file if missing
 if [ ! -s "${UBUNTU}" ]; then
