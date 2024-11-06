@@ -4,7 +4,7 @@
 # Checks for release found in current directory
 DEBIAN='12.6.0'
 # Check for next release to show up as there is no current directory to look for
-FEDORA='41'
+FEDORA='42'
 # Alma only uses the first two
 ALMA='8.10'
 # Ubuntu makes this hard so we scrape the torrent tracker and diff it
