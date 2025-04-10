@@ -34,3 +34,13 @@ myBin="${HOME}/bin"
 if [ -d "${myBin}" ] && [ -z $(echo $PATH | grep "${myBin}") ]; then
     PATH="${PATH}:${myBin}"
 fi
+
+# Suggestion from @hubeadmin for copy and paste from the terminal
+# without touching the icky mouse. Helpful for creating auth tokens
+# to then use to login ala k8s
+ _copy(){
+     cat | xclip -selection clipboard
+ }
+ _paste(){
+     xclip -selection clipboard -o
+ }
