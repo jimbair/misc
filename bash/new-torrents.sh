@@ -20,12 +20,12 @@ curl -s https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA}
 
 # Create temp file if missing
 if [ ! -s "${UBUNTU}" ]; then
-  curl -s https://torrent.ubuntu.com/tracker_index | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 6
+  curl -s https://torrent.ubuntu.com/tracker_index | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 6
   exit 0
 fi
 
 # See what has changed in Ubuntu and clean-up if no changes
-curl -s https://torrent.ubuntu.com/tracker_index | grep -v beta | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
+curl -s https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
 diff -q ${UBUNTU} ${UBUNTU}.new > /dev/null || UPDATES="${UPDATES} Ubuntu"
 
 # Report which torrents have updates, if any
