@@ -2,7 +2,7 @@
 # Check for updates to torrents for our mirror
 
 # Checks for release found in current directory
-DEBIAN='12.11.0'
+DEBIAN='13.0.0'
 # Check for next release to show up as there is no current directory to look for
 FEDORA='43'
 # Alma only uses the first two
