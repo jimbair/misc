@@ -1,0 +1,33 @@
+#!/bin/bash
+# For use as /etc/NetworkManager/dispatcher.d/99-vpn-local-route
+# Used when your VPN wants to route the entirety of 10.0.0.0/8 over the
+# vpn, but you are using 10.x space locally on your network.
+# Tested on Fedora 43 Workstation
+
+# Define your local subnet
+SUBNET="10.0.0.0/24"
+
+# Priority just above the VPN rule
+#
+# Check local routing with 'ip route get 10.0.0.50'
+# and do the same with a work IP and a public IP to compare.
+#
+# Check your rules/tables with the 'ip rule' command and use 
+# 'ip route show table X' where X is the table to confirm routing
+# rules and priorities.
+PRIORITY="16000"
+
+# This is where the magic happens.
+interface=$1
+status=$2
+
+if [[ "$interface" =~ ^(tun|wg|vpns) ]]; then
+    case $status in
+        vpn-up)
+            ip rule add to $SUBNET lookup main priority $PRIORITY
+            ;;
+        vpn-down)
+            ip rule del to $SUBNET lookup main priority $PRIORITY
+            ;;
+    esac
+fi
