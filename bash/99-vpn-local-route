@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/sh
 # For use as /etc/NetworkManager/dispatcher.d/99-vpn-local-route
 # Used when your VPN wants to route the entirety of 10.0.0.0/8 over the
 # vpn, but you are using 10.x space locally on your network.
@@ -21,13 +21,15 @@ PRIORITY="16000"
 interface=$1
 status=$2
 
-if [[ "$interface" =~ ^(tun|wg|vpns) ]]; then
-    case $status in
-        vpn-up)
-            ip rule add to $SUBNET lookup main priority $PRIORITY
-            ;;
-        vpn-down)
-            ip rule del to $SUBNET lookup main priority $PRIORITY
-            ;;
-    esac
-fi
+case "$interface" in
+    tun*|wg*|vpns*)
+        case "$status" in
+            vpn-up)
+                ip rule add to $SUBNET lookup main priority $PRIORITY
+                ;;
+            vpn-down)
+                ip rule del to $SUBNET lookup main priority $PRIORITY
+                ;;
+        esac
+        ;;
+esac
