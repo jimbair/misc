@@ -15,7 +15,6 @@ PROXMOX8='8.4-1'
 PROXMOX9='9.1-1'
 # Ubuntu makes this hard so we scrape the torrent tracker and diff it
 UBUNTU='/tmp/ubuntu-torrents.txt'
-
 # Report what has updates if we find any
 UPDATES=''
 
@@ -38,8 +37,7 @@ rm -f /tmp/pm-cache
 
 # Create temp file if missing
 if [ ! -s "${UBUNTU}" ]; then
-  curl ${COPTS} https://torrent.ubuntu.com/tracker_index | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 6
-  exit 0
+  curl ${COPTS} https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 6
 fi
 
 # See what has changed in Ubuntu and clean-up if no changes
