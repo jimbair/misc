@@ -15,6 +15,7 @@ PROXMOX8='8.4-1'
 PROXMOX9='9.1-1'
 # Ubuntu makes this hard so we scrape the torrent tracker and diff it
 UBUNTU='/tmp/ubuntu-torrents.txt'
+
 # Report what has updates if we find any
 UPDATES=''
 
