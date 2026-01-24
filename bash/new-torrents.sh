@@ -13,19 +13,22 @@ UBUNTU='/tmp/ubuntu-torrents.txt'
 # Report what has updates if we find any
 UPDATES=''
 
+# cURL Options
+COPTS='-s -m 5'
+
 # Run the checks
-curl -s https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || UPDATES='Debian'
-curl -s https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && UPDATES="${UPDATES} Fedora"
-curl -s https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA}" || UPDATES="${UPDATES} Alma 9"
+curl ${COPTS} https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || UPDATES='Debian'
+curl ${COPTS} https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && UPDATES="${UPDATES} Fedora"
+curl ${COPTS} https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA}" || UPDATES="${UPDATES} Alma 9"
 
 # Create temp file if missing
 if [ ! -s "${UBUNTU}" ]; then
-  curl -s https://torrent.ubuntu.com/tracker_index | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 6
+  curl ${COPTS} https://torrent.ubuntu.com/tracker_index | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 6
   exit 0
 fi
 
 # See what has changed in Ubuntu and clean-up if no changes
-curl -s https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
+curl ${COPTS} https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
 diff -q ${UBUNTU} ${UBUNTU}.new > /dev/null || UPDATES="${UPDATES} Ubuntu"
 
 # Report which torrents have updates, if any
