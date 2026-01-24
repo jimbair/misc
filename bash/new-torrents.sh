@@ -6,7 +6,8 @@ DEBIAN='13.3.0'
 # Check for next release to show up as there is no current directory to look for
 FEDORA='44'
 # Alma only uses the first two
-ALMA='9.7'
+ALMA9='9.7'
+ALMA10='10.1'
 # Proxmox latest
 PROXMOX='9.1-1'
 # Ubuntu makes this hard so we scrape the torrent tracker and diff it
@@ -21,7 +22,8 @@ COPTS='-s -m 5'
 # Run the checks
 curl ${COPTS} https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || UPDATES='Debian'
 curl ${COPTS} https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && UPDATES="${UPDATES} Fedora"
-curl ${COPTS} https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA}" || UPDATES="${UPDATES} Alma 9"
+curl ${COPTS} https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA9}" || UPDATES="${UPDATES} Alma 9"
+curl ${COPTS} https://mirror.rackspace.com/almalinux/10/isos/x86_64/ | grep -q "${ALMA10}" || UPDATES="${UPDATES} Alma 10"
 curl ${COPTS} https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso | grep -q "${PROXMOX}" || UPDATES="${UPDATES} Proxmox 9"
 
 # Create temp file if missing
