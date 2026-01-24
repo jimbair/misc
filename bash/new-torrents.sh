@@ -7,6 +7,8 @@ DEBIAN='13.3.0'
 FEDORA='44'
 # Alma only uses the first two
 ALMA='9.7'
+# Proxmox latest
+PROXMOX='9.1-1'
 # Ubuntu makes this hard so we scrape the torrent tracker and diff it
 UBUNTU='/tmp/ubuntu-torrents.txt'
 
@@ -20,6 +22,7 @@ COPTS='-s -m 5'
 curl ${COPTS} https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || UPDATES='Debian'
 curl ${COPTS} https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && UPDATES="${UPDATES} Fedora"
 curl ${COPTS} https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA}" || UPDATES="${UPDATES} Alma 9"
+curl ${COPTS} https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso | grep -q "${PROXMOX}" || UPDATES="${UPDATES} Proxmox 9"
 
 # Create temp file if missing
 if [ ! -s "${UBUNTU}" ]; then
