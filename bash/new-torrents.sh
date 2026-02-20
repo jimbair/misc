@@ -1,5 +1,6 @@
 #!/bin/bash
 # Check for updates to torrents for our mirror
+# https://mirror.tsue.net/
 
 # Checks for release found in current directory
 DEBIAN='13.3.0'
@@ -62,7 +63,6 @@ if [ -n "${UPDATES}" ]; then
   echo ${UPDATES}
   exit 1
 fi
-
 # We made it
 rm -f ${UBUNTU}.new
 exit 0
