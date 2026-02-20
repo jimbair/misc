@@ -63,6 +63,7 @@ if [ -n "${UPDATES}" ]; then
   echo ${UPDATES}
   exit 1
 fi
+
 # We made it
 rm -f ${UBUNTU}.new
 exit 0
