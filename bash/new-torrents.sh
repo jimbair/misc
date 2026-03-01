@@ -21,6 +21,9 @@ PROXMOX9='9.1-1'
 # CachyOS
 CACHY='260124'
 
+# Linux Mint
+MINT='22.3'
+
 # Ubuntu makes this hard so we scrape the torrent tracker and diff it
 UBUNTU='/tmp/ubuntu-torrents.txt'
 
@@ -36,6 +39,7 @@ curl ${COPTS} https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}
 curl ${COPTS} https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA9}" || UPDATES="${UPDATES} Alma 9"
 curl ${COPTS} https://mirror.rackspace.com/almalinux/10/isos/x86_64/ | grep -q "${ALMA10}" || UPDATES="${UPDATES} Alma 10"
 curl ${COPTS} https://mirrors.lansing2600.org/cachyos/ISO/desktop/ | grep -q "${CACHY}" || UPDATES="${UPDATES} CachyOS"
+curl ${COPTS} https://linuxmint.com/download.php | grep -q "${MINT}" || UPDATES="${UPDATES} LinuxMint"
 
 # Let's be nice to their server
 curl ${COPTS} https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso > /tmp/pm-cache
