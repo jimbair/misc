@@ -56,6 +56,7 @@ fi
 
 # See what has changed in Ubuntu and clean-up if no changes
 curl ${COPTS} https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
+
 # The Ubuntu tracker likes to go offline quite a bit sadly.
 # If it's down (empty file after the greppy pipes) we can skip it for now.
 if [ -s "${UBUNTU}.new" ]; then
