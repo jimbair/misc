@@ -19,7 +19,7 @@ PROXMOX8='8.4-1'
 PROXMOX9='9.1-1'
 
 # CachyOS
-CACHY='260124'
+CACHY='260308'
 
 # Linux Mint
 MINT='22.3'
