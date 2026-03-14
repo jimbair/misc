@@ -3,7 +3,7 @@
 # https://mirror.tsue.net/
 
 # Checks for release found in current directory
-DEBIAN='13.3.0'
+DEBIAN='13.4.0'
 
 # Check for next release to show up as there is no current directory to look for
 FEDORA='44'
