@@ -38,7 +38,7 @@ curl ${COPTS} https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep 
 curl ${COPTS} https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && UPDATES="${UPDATES} Fedora"
 curl ${COPTS} https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA9}" || UPDATES="${UPDATES} Alma 9"
 curl ${COPTS} https://mirror.rackspace.com/almalinux/10/isos/x86_64/ | grep -q "${ALMA10}" || UPDATES="${UPDATES} Alma 10"
-curl ${COPTS} https://mirrors.lansing2600.org/cachyos/ISO/desktop/ | grep -q "${CACHY}" || UPDATES="${UPDATES} CachyOS"
+curl ${COPTS} https://cachyos.org/download/ | grep -q "${CACHY}" || UPDATES="${UPDATES} CachyOS"
 curl ${COPTS} https://linuxmint.com/download.php | grep -q "${MINT}" || UPDATES="${UPDATES} LinuxMint"
 
 # Let's be nice to their server
