@@ -1,6 +1,5 @@
 #!/bin/bash
 # Check for updates to torrents for our mirror
-# https://mirror.tsue.net/
 
 # Checks for release found in current directory
 DEBIAN='13.4.0'
@@ -11,6 +10,9 @@ FEDORA='44'
 # Alma only uses the first two
 ALMA9='9.7'
 ALMA10='10.1'
+
+# All the cool kids use arch. Check for current iso in /latest/
+ARCH='2026.03.01'
 
 # Proxmox
 PROXMOX6='6.4-1'
@@ -38,6 +40,7 @@ curl ${COPTS} https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep 
 curl ${COPTS} https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && UPDATES="${UPDATES} Fedora"
 curl ${COPTS} https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA9}" || UPDATES="${UPDATES} Alma 9"
 curl ${COPTS} https://mirror.rackspace.com/almalinux/10/isos/x86_64/ | grep -q "${ALMA10}" || UPDATES="${UPDATES} Alma 10"
+curl ${COPTS} https://mirror.rackspace.com/archlinux/iso/latest/ | grep -q "${ARCH}" || UPDATES="${UPDATES} Arch"
 curl ${COPTS} https://cachyos.org/download/ | grep -q "${CACHY}" || UPDATES="${UPDATES} CachyOS"
 curl ${COPTS} https://linuxmint.com/download.php | grep -q "${MINT}" || UPDATES="${UPDATES} LinuxMint"
 
@@ -57,8 +60,7 @@ fi
 # See what has changed in Ubuntu and clean-up if no changes
 curl ${COPTS} https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
 
-# The Ubuntu tracker likes to go offline quite a bit sadly.
-# If it's down (empty file after the greppy pipes) we can skip it for now.
+# The ubuntu tracker likes to go offline quite a bit sadly
 if [ -s "${UBUNTU}.new" ]; then
   diff -q ${UBUNTU} ${UBUNTU}.new > /dev/null || UPDATES="${UPDATES} Ubuntu"
 fi
