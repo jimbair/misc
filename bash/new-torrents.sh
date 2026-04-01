@@ -13,7 +13,7 @@ ALMA9='9.7'
 ALMA10='10.1'
 
 # All the cool kids use arch. Check for current iso in /latest/
-ARCH='2026.03.01'
+ARCH='2026.04.01'
 
 # Proxmox
 PROXMOX6='6.4-1'
