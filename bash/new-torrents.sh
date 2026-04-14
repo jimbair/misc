@@ -47,10 +47,10 @@ curl "${COPTS[@]}" https://linuxmint.com/download.php | grep -q "${MINT}" || UPD
 
 # Let's be nice to their server
 curl "${COPTS[@]}" https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso > /tmp/pm-cache
-grep -q ${PROXMOX6} /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 6"
-grep -q ${PROXMOX7} /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 7"
-grep -q ${PROXMOX8} /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 8"
-grep -q ${PROXMOX9} /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 9"
+grep -q "${PROXMOX6}" /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 6"
+grep -q "${PROXMOX7}" /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 7"
+grep -q "${PROXMOX8}" /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 8"
+grep -q "${PROXMOX9}" /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 9"
 rm -f /tmp/pm-cache
 
 # Bootstrap baseline file if missing, otherwise diff for changes
