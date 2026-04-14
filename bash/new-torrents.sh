@@ -34,19 +34,19 @@ UBUNTU='/tmp/ubuntu-torrents.txt'
 UPDATES=''
 
 # cURL Options
-COPTS='-s -m 10'
+COPTS=(-s -m 10)
 
 # Run the simple checks
-curl ${COPTS} https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || UPDATES='Debian'
-curl ${COPTS} https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && UPDATES="${UPDATES} Fedora"
-curl ${COPTS} https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA9}" || UPDATES="${UPDATES} Alma 9"
-curl ${COPTS} https://mirror.rackspace.com/almalinux/10/isos/x86_64/ | grep -q "${ALMA10}" || UPDATES="${UPDATES} Alma 10"
-curl ${COPTS} https://mirror.rackspace.com/archlinux/iso/latest/ | grep -q "${ARCH}" || UPDATES="${UPDATES} Arch"
-curl ${COPTS} https://cachyos.org/download/ | grep -q "${CACHY}" || UPDATES="${UPDATES} CachyOS"
-curl ${COPTS} https://linuxmint.com/download.php | grep -q "${MINT}" || UPDATES="${UPDATES} LinuxMint"
+curl "${COPTS[@]}" https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || UPDATES='Debian'
+curl "${COPTS[@]}" https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && UPDATES="${UPDATES} Fedora"
+curl "${COPTS[@]}" https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA9}" || UPDATES="${UPDATES} Alma 9"
+curl "${COPTS[@]}" https://mirror.rackspace.com/almalinux/10/isos/x86_64/ | grep -q "${ALMA10}" || UPDATES="${UPDATES} Alma 10"
+curl "${COPTS[@]}" https://mirror.rackspace.com/archlinux/iso/latest/ | grep -q "${ARCH}" || UPDATES="${UPDATES} Arch"
+curl "${COPTS[@]}" https://cachyos.org/download/ | grep -q "${CACHY}" || UPDATES="${UPDATES} CachyOS"
+curl "${COPTS[@]}" https://linuxmint.com/download.php | grep -q "${MINT}" || UPDATES="${UPDATES} LinuxMint"
 
 # Let's be nice to their server
-curl ${COPTS} https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso > /tmp/pm-cache
+curl "${COPTS[@]}" https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso > /tmp/pm-cache
 grep -q ${PROXMOX6} /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 6"
 grep -q ${PROXMOX7} /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 7"
 grep -q ${PROXMOX8} /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 8"
@@ -55,11 +55,11 @@ rm -f /tmp/pm-cache
 
 # Bootstrap baseline file if missing, otherwise diff for changes
 if [ ! -s "${UBUNTU}" ]; then
-  curl ${COPTS} https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 6
+  curl "${COPTS[@]}" https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 6
 else
   # The ubuntu tracker likes to go offline quite a bit sadly
   # If it's down (empty file after the greppy pipes) we can skip it for now.
-  curl ${COPTS} https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
+  curl "${COPTS[@]}" https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
   if [ -s "${UBUNTU}.new" ]; then
     diff -q ${UBUNTU} ${UBUNTU}.new > /dev/null || UPDATES="${UPDATES} Ubuntu"
   fi
