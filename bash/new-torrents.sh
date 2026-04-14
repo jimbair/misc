@@ -55,7 +55,7 @@ rm -f /tmp/pm-cache
 
 # Bootstrap baseline file if missing, otherwise diff for changes
 if [ ! -s "${UBUNTU}" ]; then
-  curl "${COPTS[@]}" https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}" || exit 6
+  curl "${COPTS[@]}" https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}" || { echo "Unable to create initial Ubuntu temp file. Exiting."; exit 1; }
 else
   # The ubuntu tracker likes to go offline quite a bit sadly
   # If it's down (empty file after the greppy pipes) we can skip it for now.
