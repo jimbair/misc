@@ -34,7 +34,7 @@ UBUNTU='/tmp/ubuntu-torrents.txt'
 UPDATES=''
 
 # cURL Options
-COPTS=(-s -m 10)
+COPTS=(--silent --max-time 10 --fail-with-body)
 
 # Run the simple checks
 curl "${COPTS[@]}" https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || UPDATES='Debian'
