@@ -55,13 +55,13 @@ rm -f /tmp/pm-cache
 
 # Bootstrap baseline file if missing, otherwise diff for changes
 if [ ! -s "${UBUNTU}" ]; then
-  curl "${COPTS[@]}" https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU} || exit 6
+  curl "${COPTS[@]}" https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}" || exit 6
 else
   # The ubuntu tracker likes to go offline quite a bit sadly
   # If it's down (empty file after the greppy pipes) we can skip it for now.
-  curl "${COPTS[@]}" https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > ${UBUNTU}.new
+  curl "${COPTS[@]}" https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}.new"
   if [ -s "${UBUNTU}.new" ]; then
-    diff -q ${UBUNTU} ${UBUNTU}.new > /dev/null || UPDATES="${UPDATES} Ubuntu"
+    diff -q "${UBUNTU}" "${UBUNTU}.new" > /dev/null || UPDATES="${UPDATES} Ubuntu"
   fi
 fi
 
@@ -72,5 +72,5 @@ if [ -n "${UPDATES}" ]; then
 fi
 
 # We made it
-rm -f ${UBUNTU}.new
+rm -f "${UBUNTU}.new"
 exit 0
