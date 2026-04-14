@@ -67,7 +67,7 @@ fi
 
 # Report which torrents have updates, if any
 if [ -n "${UPDATES}" ]; then
-  echo ${UPDATES}
+  echo "${UPDATES# }"
   exit 1
 fi
 
