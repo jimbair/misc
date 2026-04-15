@@ -36,32 +36,119 @@ UPDATES=''
 # cURL Options
 COPTS=(--silent --max-time 10 --fail-with-body)
 
-# Run the simple checks
-curl "${COPTS[@]}" https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/ | grep -q "${DEBIAN}" || UPDATES='Debian'
-curl "${COPTS[@]}" https://mirror.rackspace.com/fedora/releases/ | grep -q "${FEDORA}" && UPDATES="${UPDATES} Fedora"
-curl "${COPTS[@]}" https://mirror.rackspace.com/almalinux/9/isos/x86_64/ | grep -q "${ALMA9}" || UPDATES="${UPDATES} Alma 9"
-curl "${COPTS[@]}" https://mirror.rackspace.com/almalinux/10/isos/x86_64/ | grep -q "${ALMA10}" || UPDATES="${UPDATES} Alma 10"
-curl "${COPTS[@]}" https://mirror.rackspace.com/archlinux/iso/latest/ | grep -q "${ARCH}" || UPDATES="${UPDATES} Arch"
-curl "${COPTS[@]}" https://cachyos.org/download/ | grep -q "${CACHY}" || UPDATES="${UPDATES} CachyOS"
-curl "${COPTS[@]}" https://linuxmint.com/download.php | grep -q "${MINT}" || UPDATES="${UPDATES} LinuxMint"
+# Tracks consecutive curl failures per distro so transient outages
+# are silently ignored but sustained ones get reported as NAME(DOWN).
+FAIL_FILE='/tmp/new-torrents-failures'
+FAIL_THRESHOLD=3
+touch "${FAIL_FILE}"
 
-# Let's be nice to their server
-curl "${COPTS[@]}" https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso > /tmp/pm-cache
-grep -q "${PROXMOX6}" /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 6"
-grep -q "${PROXMOX7}" /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 7"
-grep -q "${PROXMOX8}" /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 8"
-grep -q "${PROXMOX9}" /tmp/pm-cache || UPDATES="${UPDATES} Proxmox 9"
-rm -f /tmp/pm-cache
+# Fetch a URL and track consecutive failures.
+# On success, the response is stored in the global BODY variable.
+# On failure, each NAME in the pair list is tracked and reported after threshold.
+# Usage: fetch URL NAME1 PATTERN1 [NAME2 PATTERN2 ...]
+#   The name/pattern pairs are passed through so fetch knows which names
+#   to mark as (DOWN) if the server is unreachable.
+fetch() {
+  local URL="${1}"
+  shift
+  local COUNT
+
+  BODY=$(curl "${COPTS[@]}" "${URL}")
+
+  if [ $? -ne 0 ]; then
+    BODY=""
+    # Track and report failure for every name associated with this URL
+    while [ $# -ge 2 ]; do
+      local NAME="${1}"
+      shift 2
+      COUNT=$(grep "^${NAME}=" "${FAIL_FILE}" | cut -d= -f2)
+      COUNT=$(( ${COUNT:-0} + 1 ))
+      if grep -q "^${NAME}=" "${FAIL_FILE}"; then
+        sed -i "s/^${NAME}=.*/${NAME}=${COUNT}/" "${FAIL_FILE}"
+      else
+        echo "${NAME}=${COUNT}" >> "${FAIL_FILE}"
+      fi
+      if [ "${COUNT}" -ge "${FAIL_THRESHOLD}" ]; then
+        UPDATES="${UPDATES} ${NAME}(DOWN)"
+      fi
+    done
+    return 1
+  fi
+
+  # curl succeeded -- reset failure counters for all names
+  while [ $# -ge 2 ]; do
+    local NAME="${1}"
+    shift 2
+    if grep -q "^${NAME}=" "${FAIL_FILE}"; then
+      sed -i "s/^${NAME}=.*/${NAME}=0/" "${FAIL_FILE}"
+    fi
+  done
+}
+
+# Check a distro's download page for version strings.
+# Calls fetch once, then checks each name/pattern pair against the response.
+# Usage: check_distro URL MATCH NAME1 PATTERN1 [NAME2 PATTERN2 ...]
+#   URL   - page to fetch with curl
+#   MATCH - "missing": alert when pattern is absent (most distros)
+#           "present": alert when pattern appears (e.g., Fedora next release)
+#   Remaining args are name/pattern pairs to check against the fetched page.
+check_distro() {
+  local URL="${1}" MATCH="${2}"
+  shift 2
+
+  fetch "${URL}" "$@"
+  if [ $? -ne 0 ]; then
+    return
+  fi
+
+  while [ $# -ge 2 ]; do
+    local NAME="${1}" PATTERN="${2}"
+    shift 2
+    if [ "${MATCH}" = "present" ]; then
+      echo "${BODY}" | grep -q "${PATTERN}" && UPDATES="${UPDATES} ${NAME}"
+      continue
+    fi
+    echo "${BODY}" | grep -q "${PATTERN}" || UPDATES="${UPDATES} ${NAME}"
+  done
+}
+
+# Run the checks
+check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/" missing "Debian" "${DEBIAN}"
+check_distro "https://mirror.rackspace.com/fedora/releases/"              present "Fedora" "${FEDORA}"
+check_distro "https://mirror.rackspace.com/almalinux/9/isos/x86_64/"     missing "Alma 9" "${ALMA9}"
+check_distro "https://mirror.rackspace.com/almalinux/10/isos/x86_64/"    missing "Alma 10" "${ALMA10}"
+check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"         missing "Arch" "${ARCH}"
+check_distro "https://cachyos.org/download/"                              missing "CachyOS" "${CACHY}"
+check_distro "https://linuxmint.com/download.php"                         missing "LinuxMint" "${MINT}"
+
+# Single fetch, four version checks
+check_distro "https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso" missing \
+  "Proxmox 6" "${PROXMOX6}" \
+  "Proxmox 7" "${PROXMOX7}" \
+  "Proxmox 8" "${PROXMOX8}" \
+  "Proxmox 9" "${PROXMOX9}"
 
 # Bootstrap baseline file if missing, otherwise diff for changes
 if [ ! -s "${UBUNTU}" ]; then
-  curl "${COPTS[@]}" https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}" || { echo "Unable to create initial Ubuntu temp file. Exiting."; exit 1; }
+  fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" ""
+  if [ $? -ne 0 ]; then
+    echo "Unable to reach Ubuntu tracker on first run. Exiting."
+    exit 1
+  fi
+  echo "${BODY}" | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}"
+  if [ ! -s "${UBUNTU}" ]; then
+    echo "Unable to create initial Ubuntu temp file. Exiting."
+    exit 1
+  fi
 else
   # The ubuntu tracker likes to go offline quite a bit sadly
-  # If it's down (empty file after the greppy pipes) we can skip it for now.
-  curl "${COPTS[@]}" https://torrent.ubuntu.com/tracker_index | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}.new"
-  if [ -s "${UBUNTU}.new" ]; then
-    diff -q "${UBUNTU}" "${UBUNTU}.new" > /dev/null || UPDATES="${UPDATES} Ubuntu"
+  # If it's down, fetch handles the failure tracking for us.
+  fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" ""
+  if [ $? -eq 0 ]; then
+    echo "${BODY}" | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}.new"
+    if [ -s "${UBUNTU}.new" ]; then
+      diff -q "${UBUNTU}" "${UBUNTU}.new" > /dev/null || UPDATES="${UPDATES} Ubuntu"
+    fi
   fi
 fi
 
