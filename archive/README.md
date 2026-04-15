@@ -1,0 +1,1 @@
+The following scripts are no longer useful, but I enjoy keeping snippets and examples around to reference later (part of getting old, I suppose). Maybe they'll be useful to someone down the road beyond their intended purpose.
