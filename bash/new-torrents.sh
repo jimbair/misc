@@ -113,13 +113,13 @@ check_distro() {
 }
 
 # Run the checks
-check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/" missing "Debian" "${DEBIAN}"
-check_distro "https://mirror.rackspace.com/fedora/releases/"              present "Fedora" "${FEDORA}"
-check_distro "https://mirror.rackspace.com/almalinux/9/isos/x86_64/"     missing "Alma 9" "${ALMA9}"
-check_distro "https://mirror.rackspace.com/almalinux/10/isos/x86_64/"    missing "Alma 10" "${ALMA10}"
-check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"         missing "Arch" "${ARCH}"
-check_distro "https://cachyos.org/download/"                              missing "CachyOS" "${CACHY}"
-check_distro "https://linuxmint.com/download.php"                         missing "LinuxMint" "${MINT}"
+check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/" missing  "Debian"    "${DEBIAN}"
+check_distro "https://mirror.rackspace.com/fedora/releases/"              present  "Fedora"    "${FEDORA}"
+check_distro "https://mirror.rackspace.com/almalinux/9/isos/x86_64/"      missing  "Alma 9"    "${ALMA9}"
+check_distro "https://mirror.rackspace.com/almalinux/10/isos/x86_64/"     missing  "Alma 10"   "${ALMA10}"
+check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"         missing  "Arch"      "${ARCH}"
+check_distro "https://cachyos.org/download/"                              missing  "CachyOS"   "${CACHY}"
+check_distro "https://linuxmint.com/download.php"                         missing  "LinuxMint" "${MINT}"
 
 # Single fetch, four version checks
 check_distro "https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso" missing \
