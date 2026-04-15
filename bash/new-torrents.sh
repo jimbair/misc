@@ -38,7 +38,7 @@ COPTS=(--silent --max-time 10 --fail-with-body)
 
 # Tracks consecutive curl failures per distro so transient outages
 # are silently ignored but sustained ones get reported as NAME(DOWN).
-FAIL_FILE='/tmp/new-torrents-failures'
+FAIL_FILE='/tmp/new-torrents-failures.txt'
 FAIL_THRESHOLD=3
 touch "${FAIL_FILE}"
 
