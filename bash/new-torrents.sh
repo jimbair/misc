@@ -45,6 +45,7 @@ touch "${FAIL_FILE}"
 # Fetch a URL and track consecutive failures.
 # On success, the response is stored in the global BODY variable.
 # On failure, each NAME in the pair list is tracked and reported after threshold.
+#
 # Usage: fetch URL NAME1 PATTERN1 [NAME2 PATTERN2 ...]
 #   The name/pattern pairs are passed through so fetch knows which names
 #   to mark as (DOWN) if the server is unreachable.
