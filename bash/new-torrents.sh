@@ -146,6 +146,8 @@ else
   fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" ""
   if [ $? -eq 0 ]; then
     echo "${BODY}" | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}.new"
+    # If there are updates, leave the .new file in place (and allow updates, in case an update is rolled back)
+    # for manual diffing to see what has changed since the previous stable state file.
     if [ -s "${UBUNTU}.new" ]; then
       diff -q "${UBUNTU}" "${UBUNTU}.new" > /dev/null || UPDATES="${UPDATES} Ubuntu"
     fi
