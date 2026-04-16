@@ -87,6 +87,8 @@ fetch() {
 
 # Check a distro's download page for version strings.
 # Calls fetch once, then checks each name/pattern pair against the response.
+# Allows for checking multiple versions, most notably with Proxmox. 
+#
 # Usage: check_distro URL MATCH NAME1 PATTERN1 [NAME2 PATTERN2 ...]
 #   URL   - page to fetch with curl
 #   MATCH - "missing": alert when pattern is absent (most distros)
@@ -104,11 +106,14 @@ check_distro() {
   while [ $# -ge 2 ]; do
     local NAME="${1}" PATTERN="${2}"
     shift 2
-    if [ "${MATCH}" = "present" ]; then
+    if [ "${MATCH}" = "missing" ]; then
+      echo "${BODY}" | grep -q "${PATTERN}" || UPDATES="${UPDATES} ${NAME}"
+    elif [ "${MATCH}" = "present" ]; then
       echo "${BODY}" | grep -q "${PATTERN}" && UPDATES="${UPDATES} ${NAME}"
-      continue
+    else
+      echo "ERROR: Unsuppoted check_distro match. Exiting."
+      exit 1
     fi
-    echo "${BODY}" | grep -q "${PATTERN}" || UPDATES="${UPDATES} ${NAME}"
   done
 }
 
