@@ -135,7 +135,7 @@ check_distro "https://www.proxmox.com/en/downloads/proxmox-virtual-environment/i
 
 # Bootstrap baseline file if missing, otherwise diff for changes
 if [ ! -s "${UBUNTU}" ]; then
-  fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" ""
+  fetch "https://torrent.ubuntu.com/tracker_index"
   if [ $? -ne 0 ]; then
     echo "Unable to reach Ubuntu tracker on first run. Exiting."
     exit 1
@@ -148,7 +148,7 @@ if [ ! -s "${UBUNTU}" ]; then
 else
   # The ubuntu tracker likes to go offline quite a bit sadly
   # If it's down, fetch handles the failure tracking for us.
-  fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" ""
+  fetch "https://torrent.ubuntu.com/tracker_index"
   if [ $? -eq 0 ]; then
     echo "${BODY}" | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}.new"
     # If there are updates, leave the .new file in place (and allow updates, in case an update is rolled back)
