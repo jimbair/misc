@@ -1,6 +1,8 @@
 #!/bin/bash
 # Check for updates to torrents for our mirror
 # https://mirror.tsue.net/
+#
+# This script runs once an hour via cron and raises an alert via healthchecks.io
 
 # For the following distros, check for the current release and alerts if missing
 ALMA9='9.7'
@@ -19,15 +21,36 @@ PROXMOX9='9.1-1'
 FEDORA='44'
 
 # Ubuntu makes this difficult, so we scrape the torrent tracker and diff it
-UBUNTU='/tmp/ubuntu-torrents.txt'
-
-# Report what has updates if we find any
-UPDATES=''
+UBUNTU_STATE='/tmp/ubuntu-torrents.txt'
 
 # Tracks consecutive curl failures per distro so transient outages
 # are silently ignored but sustained ones get reported as NAME(DOWN).
 FAIL_THRESHOLD=3
 FAIL_FILE='/tmp/new-torrents-failures.txt'
+
+#############
+# FUNCTIONS #
+#############
+
+# Add an update (and domain failures) to our UPDATE string while avoiding dupes
+#
+# Usage: add_update NAME
+#   NAME - The distro name that has an update available or a domain name that is down
+#          or appears to have a malformed payload from an outage or a new page format.
+UPDATES=''
+add_update() {
+  local NEW=$1
+  
+  # Check for duplicates and skip if it's already in our list
+  echo "${UPDATES}" | grep -qFw "${NEW}" && return
+
+  if [[ -z "${UPDATES}" ]]; then
+    UPDATES="${NEW}"
+  else
+    # Add the update to our list
+    UPDATES="${UPDATES} ${NEW}"
+  fi
+}
 
 # Fetch a URL and track consecutive failures.
 # On success, the response is stored in the global BODY variable.
@@ -41,14 +64,17 @@ fetch() {
   shift
   local COUNT
 
-  # cURL with our options; exports as thge global BODY variable
+  # Resolve the domain from the URL for alerting purposes
+  DOMAIN=$(echo "${URL}" | awk -F[/:] '{print $4}')
+
+  # cURL with our options; exports as the global BODY variable
   BODY=$(curl --silent --max-time 10 --fail-with-body "${URL}")
 
   # Track and report any failures for the distro(s) associated with this URL
-  if [ $? -ne 0 ]; then
+  if [[ $? -ne 0 ]]; then
     BODY=""
     touch "${FAIL_FILE}"
-    while [ $# -ge 2 ]; do
+    while [[ $# -ge 2 ]]; do
       local NAME="${1}"
       shift 2
       COUNT=$(grep "^${NAME}=" "${FAIL_FILE}" | cut -d= -f2)
@@ -58,15 +84,15 @@ fetch() {
       else
         echo "${NAME}=${COUNT}" >> "${FAIL_FILE}"
       fi
-      if [ "${COUNT}" -ge "${FAIL_THRESHOLD}" ]; then
-        UPDATES="${UPDATES} ${NAME}(DOWN)"
+      if [[ "${COUNT}" -ge "${FAIL_THRESHOLD}" ]]; then
+        add_update "${DOMAIN}"
       fi
     done
     return 1
   fi
 
   # curl succeeded -- reset failure counters for all names
-  while [ $# -ge 2 ]; do
+  while [[ $# -ge 2 ]]; do
     local NAME="${1}"
     shift 2
     if grep -q "^${NAME}=" "${FAIL_FILE}"; then
@@ -77,7 +103,7 @@ fetch() {
 
 # Check a distro's download page for version strings.
 # Calls fetch once, then checks each name/pattern pair against the response.
-# Allows for checking multiple versions, most notably with Proxmox. 
+# Allows for checking multiple versions, most notably with Proxmox.
 #
 # Usage: check_distro URL MATCH NAME1 PATTERN1 [NAME2 PATTERN2 ...]
 #   URL   - page to fetch with curl
@@ -88,29 +114,33 @@ check_distro() {
   local URL="${1}" MATCH="${2}"
   shift 2
 
-  fetch "${URL}" "$@"
-  if [ $? -ne 0 ]; then
-    return
+  # Try to fetch our page
+  fetch "${URL}" "$@" || return 1
+
+  # If fetch() is really small, alert on the domain and keep moving. This is
+  # mostly a safety net for Fedora but also avoids every Proxmox check from
+  # triggering on a single failure.
+  if [[ ${#BODY} -lt 250 ]]; then
+    add_update "${DOMAIN}"
+    return 1
   fi
 
-  while [ $# -ge 2 ]; do
+  # Allows multiple sets per page, mostly for Proxmox currently
+  while [[ $# -ge 2 ]]; do
     local NAME="${1}" PATTERN="${2}"
     shift 2
-    if [ "${MATCH}" = "missing" ]; then
-      echo "${BODY}" | grep -q "${PATTERN}" || UPDATES="${UPDATES} ${NAME}"
-    elif [ "${MATCH}" = "present" ]; then
-      echo "${BODY}" | grep -q "${PATTERN}" && UPDATES="${UPDATES} ${NAME}"
+
+    # Look for the current release to go missing
+    if [[ "${MATCH}" = "missing" ]]; then
+      echo "${BODY}" | grep -q "${PATTERN}" || add_update "${NAME}"
+    # Look for the upcoming release to be present
+    elif [[ "${MATCH}" = "present" ]]; then
+      echo "${BODY}" | grep -q "${PATTERN}" && add_update "${NAME}"
     else
-      echo "ERROR: Unsuppoted check_distro match. Exiting."
+      echo "ERROR: Unsupported check_distro match. Exiting."
       exit 1
     fi
   done
-}
-
-# Extracts ISO filenames from the Ubuntu tracker's HTML
-parse_ubuntu_isos() {
-    # Expects HTML body via stdin
-    grep -vE "beta|snapshot" | grep -oP '(?<=>)[^<]+\.iso(?=<)'
 }
 
 ########
@@ -133,40 +163,41 @@ check_distro "https://www.proxmox.com/en/downloads/proxmox-virtual-environment/i
   "Proxmox 8" "${PROXMOX8}" \
   "Proxmox 9" "${PROXMOX9}"
 
-# Bootstrap baseline file if missing, otherwise diff for changes
-if [ ! -s "${UBUNTU}" ]; then
-  # Ubuntu needs to pass both the name and fake pattern for site down detection to work
-  fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" "notused"
-  if [ $? -ne 0 ]; then
-    echo "Unable to reach Ubuntu tracker on first run. Exiting."
-    exit 1
-  fi
-  
-  echo "${BODY}" | parse_ubuntu_isos > "${UBUNTU}"
-  if [ ! -s "${UBUNTU}" ]; then
-    echo "Unable to create initial Ubuntu temp file. Exiting."
-    exit 1
-  fi
-else
-  # The ubuntu tracker likes to go offline quite a bit sadly
-  # If it's down, fetch handles the failure tracking for us.
-  fetch "https://torrent.ubuntu.com/tracker_index"  "Ubuntu" "notused"
-  if [ $? -eq 0 ]; then
-    echo "${BODY}" | parse_ubuntu_isos > "${UBUNTU}.new"
-    # If there are updates, leave the .new file in place (and allow updates, in case an update is rolled back)
-    # for manual diffing to see what has changed since the previous stable state file.
-    if [ -s "${UBUNTU}.new" ]; then
-      diff -q "${UBUNTU}" "${UBUNTU}.new" > /dev/null || UPDATES="${UPDATES} Ubuntu"
+# Custom Ubuntu Check; $2 is not used but needed for the while loop in fetch() to report errors
+fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" "notused"
+
+# If we get a good response, scrape the torrent tracker page for a list of ISOs
+if [[ $? -eq 0 ]]; then
+    UBUNTU_NEW=$(echo "${BODY}" | grep -vE "beta|snapshot" | grep -oP '(?<=>)[^<]+\.iso(?=<)')
+    # Make sure our regex worked
+    if [[ -n "${UBUNTU_NEW}" ]]; then
+        # If this is our first run, generate a state file
+        if [[ ! -s "${UBUNTU_STATE}" ]]; then
+            echo "${UBUNTU_NEW}" > "${UBUNTU_STATE}"
+        else
+            # For subsequent runs, compare the previous/current state to our new one and diff
+            # We intentionally leave .new for manual diffing for remediation. We are also fine
+            # with .new being overwritten each run as it may clear the alert.
+            echo "${UBUNTU_NEW}" > "${UBUNTU_STATE}.new"          
+            diff -q "${UBUNTU_STATE}" "${UBUNTU_STATE}.new" > /dev/null
+            if [[ $? -ne 0 ]]; then
+                add_update "Ubuntu"
+            else
+                rm -f "${UBUNTU_STATE}.new"
+            fi
+        fi
+    # Either the server broke our regex in UBUNTU_NEW or the BODY was empty
+    else
+        add_update "Ubuntu"
     fi
-  fi
 fi
 
 # Report which torrents have updates, if any
-if [ -n "${UPDATES}" ]; then
-  echo "${UPDATES# }"
+if [[ -n "${UPDATES}" ]]; then
+  echo "${UPDATES}"
   exit 1
 fi
 
 # We made it
-rm -f "${UBUNTU}.new"
+rm -f "${UBUNTU_STATE}.new"
 exit 0
