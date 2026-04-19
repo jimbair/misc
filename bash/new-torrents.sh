@@ -2,32 +2,23 @@
 # Check for updates to torrents for our mirror
 # https://mirror.tsue.net/
 
-# Checks for release found in current directory
-DEBIAN='13.4.0'
-
-# Check for next release to show up as there is no current directory to look for
-FEDORA='44'
-
-# Alma only uses the first two
+# For the following distros, check for the current release and alerts if missing
 ALMA9='9.7'
 ALMA10='10.1'
-
-# All the cool kids use arch. Check for current iso in /latest/
 ARCH='2026.04.01'
-
-# Proxmox
+CACHY='260308'
+DEBIAN='13.4.0'
+MINT='22.3'
 PROXMOX6='6.4-1'
 PROXMOX7='7.4-1'
 PROXMOX8='8.4-1'
 PROXMOX9='9.1-1'
 
-# CachyOS
-CACHY='260308'
+# Check for the upcoming release to show up as there is no current directory to look
+# for and a download page grep is a little difficult with Fedora
+FEDORA='44'
 
-# Linux Mint
-MINT='22.3'
-
-# Ubuntu makes this hard so we scrape the torrent tracker and diff it
+# Ubuntu makes this difficult, so we scrape the torrent tracker and diff it
 UBUNTU='/tmp/ubuntu-torrents.txt'
 
 # Report what has updates if we find any
@@ -35,9 +26,8 @@ UPDATES=''
 
 # Tracks consecutive curl failures per distro so transient outages
 # are silently ignored but sustained ones get reported as NAME(DOWN).
-FAIL_FILE='/tmp/new-torrents-failures.txt'
 FAIL_THRESHOLD=3
-touch "${FAIL_FILE}"
+FAIL_FILE='/tmp/new-torrents-failures.txt'
 
 # Fetch a URL and track consecutive failures.
 # On success, the response is stored in the global BODY variable.
@@ -51,12 +41,13 @@ fetch() {
   shift
   local COUNT
 
-  # cURL with our options
+  # cURL with our options; exports as thge global BODY variable
   BODY=$(curl --silent --max-time 10 --fail-with-body "${URL}")
 
+  # Track and report any failures for the distro(s) associated with this URL
   if [ $? -ne 0 ]; then
     BODY=""
-    # Track and report failure for every name associated with this URL
+    touch "${FAIL_FILE}"
     while [ $# -ge 2 ]; do
       local NAME="${1}"
       shift 2
