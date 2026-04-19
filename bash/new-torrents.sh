@@ -116,6 +116,16 @@ check_distro() {
   done
 }
 
+# Extracts ISO filenames from the Ubuntu tracker's HTML
+parse_ubuntu_isos() {
+    # Expects HTML body via stdin
+    grep -vE "beta|snapshot" | grep -oP '(?<=>)[^<]+\.iso(?=<)'
+}
+
+########
+# MAIN #
+########
+
 # Run the checks
 check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/" missing  "Debian"    "${DEBIAN}"
 check_distro "https://mirror.rackspace.com/fedora/releases/"              present  "Fedora"    "${FEDORA}"
@@ -140,7 +150,8 @@ if [ ! -s "${UBUNTU}" ]; then
     echo "Unable to reach Ubuntu tracker on first run. Exiting."
     exit 1
   fi
-  echo "${BODY}" | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}"
+  
+  echo "${BODY}" | parse_ubuntu_isos > "${UBUNTU}"
   if [ ! -s "${UBUNTU}" ]; then
     echo "Unable to create initial Ubuntu temp file. Exiting."
     exit 1
@@ -150,7 +161,7 @@ else
   # If it's down, fetch handles the failure tracking for us.
   fetch "https://torrent.ubuntu.com/tracker_index"  "Ubuntu" "notused"
   if [ $? -eq 0 ]; then
-    echo "${BODY}" | grep -v beta | grep -v snapshot | grep iso | cut -d '>' -f 8 > "${UBUNTU}.new"
+    echo "${BODY}" | parse_ubuntu_isos > "${UBUNTU}.new"
     # If there are updates, leave the .new file in place (and allow updates, in case an update is rolled back)
     # for manual diffing to see what has changed since the previous stable state file.
     if [ -s "${UBUNTU}.new" ]; then
