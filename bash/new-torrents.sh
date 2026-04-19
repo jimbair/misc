@@ -33,9 +33,6 @@ UBUNTU='/tmp/ubuntu-torrents.txt'
 # Report what has updates if we find any
 UPDATES=''
 
-# cURL Options
-COPTS=(--silent --max-time 10 --fail-with-body)
-
 # Tracks consecutive curl failures per distro so transient outages
 # are silently ignored but sustained ones get reported as NAME(DOWN).
 FAIL_FILE='/tmp/new-torrents-failures.txt'
@@ -54,7 +51,8 @@ fetch() {
   shift
   local COUNT
 
-  BODY=$(curl "${COPTS[@]}" "${URL}")
+  # cURL with our options
+  BODY=$(curl --silent --max-time 10 --fail-with-body "${URL}")
 
   if [ $? -ne 0 ]; then
     BODY=""
