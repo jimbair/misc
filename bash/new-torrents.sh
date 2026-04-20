@@ -91,6 +91,8 @@ fetch() {
   fi
 
   # curl succeeded -- reset failure counters for all names
+  # if the FAIL_FILE is present with any data in it
+  [[ ! -s "${FAIL_FILE}" ]] && return 0
   while [[ $# -ge 2 ]]; do
     local NAME="${1}"
     shift 2
