@@ -4,21 +4,20 @@
 #
 # This script runs once an hour via cron and raises an alert via healthchecks.io
 
-# For the following distros, check for the current release and alerts if missing
-ALMA9='9.7'
-ALMA10='10.1'
+# The versions to watch for in the upstream mirrors
+ALMA8='8.11'
+ALMA9='9.8'
+ALMA10='10.2'
+ALMA11='11/'
 ARCH='2026.04.01'
 CACHY='260308'
 DEBIAN='13.4.0'
+FEDORA='44'
 MINT='22.3'
 PROXMOX6='6.4-1'
 PROXMOX7='7.4-1'
 PROXMOX8='8.4-1'
 PROXMOX9='9.1-1'
-
-# Check for the upcoming release to show up as there is no current directory to look
-# for and a download page grep is a little difficult with Fedora
-FEDORA='44'
 
 # Ubuntu makes this difficult, so we scrape the torrent tracker and diff it
 UBUNTU_STATE='/tmp/ubuntu-torrents.txt'
@@ -148,20 +147,25 @@ check_distro() {
 ########
 
 # Run the checks
-check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/" missing  "Debian"    "${DEBIAN}"
-check_distro "https://mirror.rackspace.com/fedora/releases/"              present  "Fedora"    "${FEDORA}"
-check_distro "https://mirror.rackspace.com/almalinux/9/isos/x86_64/"      missing  "Alma 9"    "${ALMA9}"
-check_distro "https://mirror.rackspace.com/almalinux/10/isos/x86_64/"     missing  "Alma 10"   "${ALMA10}"
 check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"         missing  "Arch"      "${ARCH}"
 check_distro "https://cachyos.org/download/"                              missing  "CachyOS"   "${CACHY}"
+check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/" missing  "Debian"    "${DEBIAN}"
+check_distro "https://mirror.rackspace.com/fedora/releases/"              present  "Fedora"    "${FEDORA}"
 check_distro "https://linuxmint.com/download.php"                         missing  "LinuxMint" "${MINT}"
 
-# Single fetch, four version checks
+# Single fetch, check all four versions of Proxmox
 check_distro "https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso" missing \
   "Proxmox 6" "${PROXMOX6}" \
   "Proxmox 7" "${PROXMOX7}" \
   "Proxmox 8" "${PROXMOX8}" \
   "Proxmox 9" "${PROXMOX9}"
+
+# Single fetch, check all current and one upcoming Alma release
+check_distro "https://mirror.rackspace.com/almalinux/"      present  \
+  "Alma 8"    "${ALMA8}" \
+  "Alma 9"    "${ALMA9}" \
+  "Alma 10"   "${ALMA10}" \
+  "Alma 11"   "${ALMA11}"
 
 # Custom Ubuntu Check; $2 is not used but needed for the while loop in fetch() to report errors
 fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" "notused"
