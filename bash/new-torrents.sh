@@ -64,7 +64,7 @@ fetch() {
   local COUNT
 
   # Resolve the domain from the URL for alerting purposes
-  DOMAIN=$(awk -F[/:] '{print $4}' <<< "${URL})
+  DOMAIN=$(awk -F[/:] '{print $4}' <<< "${URL}")
 
   # cURL with our options; exports as the global BODY variable
   BODY=$(curl --silent --max-time 10 --fail-with-body "${URL}")
