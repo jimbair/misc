@@ -41,7 +41,7 @@ add_update() {
   local NEW=$1
   
   # Check for duplicates and skip if it's already in our list
-  echo "${UPDATES}" | grep -qFw "${NEW}" && return
+  grep -qFw "${NEW}" <<< "${UPDATES}" && return
 
   if [[ -z "${UPDATES}" ]]; then
     UPDATES="${NEW}"
@@ -64,7 +64,7 @@ fetch() {
   local COUNT
 
   # Resolve the domain from the URL for alerting purposes
-  DOMAIN=$(echo "${URL}" | awk -F[/:] '{print $4}')
+  DOMAIN=$(awk -F[/:] '{print $4}' <<< "${URL})
 
   # cURL with our options; exports as the global BODY variable
   BODY=$(curl --silent --max-time 10 --fail-with-body "${URL}")
