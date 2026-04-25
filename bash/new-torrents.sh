@@ -3,6 +3,7 @@
 # https://mirror.tsue.net/
 #
 # This script runs once an hour via cron and raises an alert via healthchecks.io
+# We send the output as a POST to /fail in the event of a non-zero exit.
 
 # Current versions - alert when these go missing from the upstream mirror
 ARCH='2026.04.01'
