@@ -4,20 +4,22 @@
 #
 # This script runs once an hour via cron and raises an alert via healthchecks.io
 
-# The versions to watch for in the upstream mirrors
-ALMA8='8.11'
-ALMA9='9.8'
-ALMA10='10.2'
-ALMA11='11.0'
+# Current versions - alert when these go missing from the upstream mirror
 ARCH='2026.04.01'
 CACHY='260308'
 DEBIAN='13.4.0'
-FEDORA='44'
 MINT='22.3'
 PROXMOX6='6.4-1'
 PROXMOX7='7.4-1'
 PROXMOX8='8.4-1'
 PROXMOX9='9.1-1'
+
+# Upcoming versions - alert when these appear on the upstream mirror
+ALMA8='8.11'
+ALMA9='9.8'
+ALMA10='10.2'
+ALMA11='11.0'
+FEDORA='44'
 
 # Where transmission stores downloaded ISOs
 ISO_DIR='/var/lib/transmission/Downloads'
