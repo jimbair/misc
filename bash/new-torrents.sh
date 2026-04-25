@@ -190,7 +190,11 @@ check_distro "https://mirror.rackspace.com/almalinux/"      present  \
   "Alma 11"   "${ALMA11}"
 
 # Ubuntu ISO check - compare tracker to our local disk
-# $2 is not used but needed for the while loop in fetch() to report errors
+#
+# Ubuntu has a lot of in-flight updates so it's difficult to track each release
+# so we scrape all active torrents from the official tracker and monitor for changes.
+
+# $2 is not used here, but is needed for the while loop in fetch() to report errors
 fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" "notused"
 
 # If we get a good response, scrape the torrent tracker page for a list of ISOs
