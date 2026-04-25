@@ -19,8 +19,11 @@ PROXMOX7='7.4-1'
 PROXMOX8='8.4-1'
 PROXMOX9='9.1-1'
 
-# Ubuntu makes this difficult, so we scrape the torrent tracker and diff it
-UBUNTU_STATE='/tmp/ubuntu-torrents.txt'
+# Where transmission stores downloaded ISOs
+ISO_DIR='/var/lib/transmission/Downloads'
+
+# Mirror status page; the bottom of this file is transmission-remote -l output
+STATUS_FILE="${ISO_DIR}/status.txt"
 
 # Tracks consecutive curl failures per distro so transient outages
 # are silently ignored but sustained ones get reported as NAME(DOWN).
@@ -133,10 +136,10 @@ check_distro() {
 
     # Look for the current release to go missing
     if [[ "${MATCH}" = "missing" ]]; then
-      echo "${BODY}" | grep -q "${PATTERN}" || add_update "${NAME}"
+      grep -q "${PATTERN}" <<< "${BODY}" || add_update "${NAME}"
     # Look for the upcoming release to be present
     elif [[ "${MATCH}" = "present" ]]; then
-      echo "${BODY}" | grep -q "${PATTERN}" && add_update "${NAME}"
+      grep -q "${PATTERN}" <<< "${BODY}" && add_update "${NAME}"
     else
       echo "ERROR: Unsupported check_distro match. Exiting."
       exit 1
@@ -147,6 +150,12 @@ check_distro() {
 ########
 # MAIN #
 ########
+
+# Bail early if the ISO directory is missing
+if [[ ! -d "${ISO_DIR}" ]]; then
+    echo "ERROR: our transmission directory ${ISO_DIR} is missing. Exiting."
+    exit 1
+fi
 
 # Run the checks
 check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"         missing  "Arch"       "${ARCH}"
@@ -169,32 +178,54 @@ check_distro "https://mirror.rackspace.com/almalinux/"      present  \
   "Alma 10"   "${ALMA10}" \
   "Alma 11"   "${ALMA11}"
 
-# Custom Ubuntu Check; $2 is not used but needed for the while loop in fetch() to report errors
+# Alert and fall back to filesystem-only checks if status.txt is
+# missing or the transmission-remote data failed to populate
+HAS_STATUS=true
+if [[ ! -s "${STATUS_FILE}" ]]; then
+    add_update "MISSING:status.txt"
+    HAS_STATUS=false
+elif ! grep -q "^Sum:" "${STATUS_FILE}"; then
+    add_update "MALFORMED:status.txt"
+    HAS_STATUS=false
+fi
+
+# Ubuntu ISO check - compare tracker to our local disk
+# $2 is not used but needed for the while loop in fetch() to report errors
 fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" "notused"
 
 # If we get a good response, scrape the torrent tracker page for a list of ISOs
 if [[ $? -eq 0 ]]; then
-    UBUNTU_NEW=$(echo "${BODY}" | grep -vE "beta|snapshot" | grep -oP '(?<=>)[^<]+\.iso(?=<)')
-    # Make sure our regex worked
-    if [[ -n "${UBUNTU_NEW}" ]]; then
-        # If this is our first run, generate a state file
-        if [[ ! -s "${UBUNTU_STATE}" ]]; then
-            echo "${UBUNTU_NEW}" > "${UBUNTU_STATE}"
-        else
-            # For subsequent runs, compare the previous/current state to our new one and diff
-            # We intentionally leave .new for manual diffing for remediation. We are also fine
-            # with .new being overwritten each run as it may clear the alert.
-            echo "${UBUNTU_NEW}" > "${UBUNTU_STATE}.new"          
-            diff -q "${UBUNTU_STATE}" "${UBUNTU_STATE}.new" > /dev/null
-            if [[ $? -ne 0 ]]; then
-                add_update "Ubuntu"
+    UBUNTU_TRACKER=$(grep -vE "beta|snapshot" <<< "${BODY}" | grep -oP '(?<=>)[^<]+\.iso(?=<)')
+    if [[ -n "${UBUNTU_TRACKER}" ]]; then
+        # Alert on tracker ISOs missing from our local disk
+        while IFS= read -r iso; do
+            # Transmission is aware of this ISO; nothing to do
+            "${HAS_STATUS}" && grep -qF "${iso}" "${STATUS_FILE}" && continue
+            if [[ -s "${ISO_DIR}/${iso}" ]]; then
+                # ISO is on our local disk but transmission doesn't know about it
+                "${HAS_STATUS}" && add_update "ORPHAN:${iso}"
             else
-                rm -f "${UBUNTU_STATE}.new"
+                # ISO is not on our local disk and not in transmission
+                add_update "MISSING:${iso}"
             fi
+        done <<< "${UBUNTU_TRACKER}"
+
+        # Alert on stale Ubuntu ISOs on our local disk but removed from the tracker
+        LOCAL_ISOS=("${ISO_DIR}"/ubuntu-*.iso)
+        # No Ubuntu ISOs found on our local disk at all
+        if [[ ! -s "${LOCAL_ISOS[0]}" ]]; then
+            add_update "MISSING:ubuntu-*.iso"
+        else
+            for file in "${LOCAL_ISOS[@]}"; do
+                iso=$(basename "${file}")
+                # ISO is still on the tracker; nothing to do
+                grep -qF "${iso}" <<< "${UBUNTU_TRACKER}" && continue
+                # ISO is on our local disk but no longer on the tracker
+                add_update "STALE:${iso}"
+            done
         fi
-    # Either the server broke our regex in UBUNTU_NEW or the BODY was empty
     else
-        add_update "Ubuntu"
+        add_update "MALFORMED:Ubuntu Tracker"
     fi
 fi
 
@@ -205,5 +236,4 @@ if [[ -n "${UPDATES}" ]]; then
 fi
 
 # We made it
-rm -f "${UBUNTU_STATE}.new"
 exit 0
