@@ -157,6 +157,17 @@ if [[ ! -d "${ISO_DIR}" ]]; then
     exit 1
 fi
 
+# Alert and fall back to filesystem-only Ubuntu checks if status.txt
+# is missing or the transmission-remote data failed to populate
+HAS_STATUS=true
+if [[ ! -s "${STATUS_FILE}" ]]; then
+    add_update "MISSING:status.txt"
+    HAS_STATUS=false
+elif ! grep -q "^Sum:" "${STATUS_FILE}"; then
+    add_update "MALFORMED:status.txt"
+    HAS_STATUS=false
+fi
+
 # Run the checks
 check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"         missing  "Arch"       "${ARCH}"
 check_distro "https://cachyos.org/download/"                              missing  "CachyOS"    "${CACHY}"
@@ -177,17 +188,6 @@ check_distro "https://mirror.rackspace.com/almalinux/"      present  \
   "Alma 9"    "${ALMA9}" \
   "Alma 10"   "${ALMA10}" \
   "Alma 11"   "${ALMA11}"
-
-# Alert and fall back to filesystem-only checks if status.txt is
-# missing or the transmission-remote data failed to populate
-HAS_STATUS=true
-if [[ ! -s "${STATUS_FILE}" ]]; then
-    add_update "MISSING:status.txt"
-    HAS_STATUS=false
-elif ! grep -q "^Sum:" "${STATUS_FILE}"; then
-    add_update "MALFORMED:status.txt"
-    HAS_STATUS=false
-fi
 
 # Ubuntu ISO check - compare tracker to our local disk
 # $2 is not used but needed for the while loop in fetch() to report errors
