@@ -1,7 +1,7 @@
 #!/bin/bash
 # Simple script to update multiple Wordpress installs
 # via local (SSH) access. Adjust base and targets as needed.
-url='http://wordpress.org/latest.tar.gz'
+url='https://wordpress.org/latest.tar.gz'
 tgz="$(echo $url | cut -d '/' -f 4-)"
 tmp="$(mktemp -d)"
 
