@@ -33,43 +33,36 @@
 # Inc., 51 Franklin Street, Fifth Floor, Boston, MA  02110-1301, USA.
 
 run() {
-	# Assign our variables based on our input.
-	# Application
-	app="$1"
-	# Command
-	com="$@"
-	# Execute Command
-	exc=$($@ 2>&1)
-	# Exit Code
-	ec=$(echo $?)
+    local app="$1"
+    local com="$*"
+    local exc ec
+    local -a unsupported=(cd exec source)
 
-	# Catch any bad commands and print out why it's not good.
-	case $app in
-		# cd built-in doesn't work with this function
-		cd)
-		echo "ERROR: $app is not supported by run()" >&2
-		echo "Exiting." >&2
-		exit 1
-		;;
+    # Validate before running anything
+    for u in "${unsupported[@]}"; do
+        if [[ "$app" == "$u" ]]; then
+            echo "ERROR: $app is not supported by run()" >&2
+            echo "Exiting." >&2
+            return 1
+        fi
+    done
 
-		# Everything else is fine, proceed.
-		*)
-		;;
-	esac
+    # Execute, capturing both streams; exit code captured immediately after
+    exc=$("$@" 2>&1)
+    ec=$?
 
-	# Check our exit code and respond accordingly. 
-	# Simply echo the output if we exit cleanly.
-	if [ $ec -eq 0 ]; then
-		if [ -n "$exc" ]; then
-			echo "$exc"
-		fi
-	# Checks for the application not being found in our $PATH by BASH.
-	elif [ $ec -eq 127 ]; then
-		echo -e "ERROR: The following application was not found by BASH:\n\n${app}\n\nThis application was called when trying to run the following command:\n\n${com}\n\nExiting."
-		exit $ec
-	# Anything else would be a non-specific exit code. Print our info and exit.
-	else
-		echo -e "ERROR: We received an exit code of $ec when running the following command:\n\n${com}\n\nError message given:\n\n${exc}\n\nExiting."
-		exit $ec
-	fi
+    case $ec in
+        0)
+            [[ -n "$exc" ]] && echo "$exc"
+            ;;
+        127)
+            echo -e "ERROR: The following application was not found in PATH:\n\n${app}\n\nThis application was called when trying to run the following command:\n\n${com}\n\nExiting." >&2
+            return $ec
+            ;;
+        *)
+            echo -e "ERROR: We received an exit code of $ec when running the following command:\n\n${com}\n\nError message given:\n\n${exc}\n\nExiting." >&2
+            return $ec
+            >&2
+            ;;
+    esac
 }
