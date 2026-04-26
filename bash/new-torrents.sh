@@ -171,6 +171,9 @@ elif ! grep -q "^Sum:" "${STATUS_FILE}"; then
     HAS_STATUS=false
 fi
 
+# Allow for quick debugging
+[[ "${1}" == "--debug" ]] && set -x
+
 # Run the checks
 check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"         missing  "Arch"       "${ARCH}"
 check_distro "https://cachyos.org/download/"                              missing  "CachyOS"    "${CACHY}"
