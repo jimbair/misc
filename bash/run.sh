@@ -16,7 +16,7 @@
 #      - Added a few more comments
 # v.1  - Initial Script
 #
-# Copyright (C) 2008  James Bair <james.d.bair@gmail.com>
+# Copyright (C) 2008-2026  James Bair <james.d.bair@gmail.com>
 #
 # This program is free software; you can redistribute it and/or
 # modify it under the terms of the GNU General Public License
