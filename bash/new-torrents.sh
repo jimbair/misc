@@ -20,7 +20,7 @@ ALMA8='8.11'
 ALMA9='9.8'
 ALMA10='10.2'
 ALMA11='11.0'
-FEDORA='44'
+FEDORA='45'
 
 # Where transmission stores downloaded ISOs
 ISO_DIR='/var/lib/transmission/Downloads'
