@@ -6,7 +6,7 @@
 # We send the output as a POST to /fail in the event of a non-zero exit.
 
 # Current versions - alert when these go missing from the upstream mirror
-ARCH='2026.04.01'
+ARCH='2026.05.01'
 CACHY='260426'
 DEBIAN='13.4.0'
 MINT='22.3'
