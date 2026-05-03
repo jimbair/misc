@@ -7,7 +7,13 @@
 mkdir -p torrents_tree torrents
 
 # Sync the tree (only downloads .torrent files)
-rsync -am --include='*/' --include='*.torrent' --exclude='*' rsync://cdimage.debian.org/debian-cd/current/ torrents_tree/ || exit 1
+rsync -am \
+  --include='/current/' \
+  --include='/current-live/' \
+  --include='*/' \
+  --include='*.torrent' \
+  --exclude='*' \
+  rsync://cdimage.debian.org/debian-cd/ torrents_tree/ || exit 1
 
 # Move torrent files into a single directory
 find torrents_tree -type f -name '*.torrent' -exec mv '{}' torrents/ \; || exit 2
