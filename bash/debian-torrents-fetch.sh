@@ -8,8 +8,6 @@ mkdir -p torrents_tree torrents
 
 # Sync the tree (only downloads .torrent files)
 rsync -am \
-  --include='/current/' \
-  --include='/current-live/' \
   --include='*/' \
   --include='*.torrent' \
   --exclude='*' \
