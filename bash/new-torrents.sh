@@ -20,7 +20,10 @@ ALMA8='8.11'
 ALMA9='9.8'
 ALMA10='10.2'
 ALMA11='11.0'
-FEDORA='45'
+
+# Fedora versions to mirror (space-separated); alert when any torrent is missing
+# from our local disk or appears on the tracker but not in transmission.
+FEDORA_VERSIONS='42 43 44'
 
 # Where transmission stores downloaded ISOs
 ISO_DIR='/var/lib/transmission/Downloads'
@@ -178,7 +181,6 @@ fi
 check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"         missing  "Arch"       "${ARCH}"
 check_distro "https://cachyos.org/download/"                              missing  "CachyOS"    "${CACHY}"
 check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/" missing  "Debian"     "${DEBIAN}"
-check_distro "https://mirror.rackspace.com/fedora/releases/"              present  "Fedora"     "${FEDORA}"
 check_distro "https://linuxmint.com/download.php"                         missing  "Linux Mint" "${MINT}"
 
 # Single fetch, check all four versions of Proxmox
@@ -194,6 +196,57 @@ check_distro "https://mirror.rackspace.com/almalinux/"      present  \
   "Alma 9"    "${ALMA9}" \
   "Alma 10"   "${ALMA10}" \
   "Alma 11"   "${ALMA11}"
+
+# Fedora torrent check - compare tracker to our local disk
+#
+# Fedora publishes torrents across multiple pages (one per release), so we use
+# the JSON API at torrent.fedoraproject.org which covers all releases at once.
+# Each torrent unpacks into a subdirectory named after the torrent (minus .torrent),
+# so we check for the directory rather than a specific ISO filename.
+
+fetch "https://torrent.fedoraproject.org/torrents.json" "Fedora" "notused"
+
+if [[ $? -eq 0 ]]; then
+    if [[ ${#BODY} -lt 250 ]]; then
+        add_update "MALFORMED:Fedora Tracker"
+    else
+        FEDORA_TRACKER=$(echo "${BODY}" | \
+            jq -r --argjson versions "$(echo "${FEDORA_VERSIONS}" | jq -Rc 'split(" ")')" \
+            '.[] | select(.name as $n | $versions | index($n)) | .torrents[].torrent' | sort)
+
+        if [[ -n "${FEDORA_TRACKER}" ]]; then
+            # Alert on tracker torrents missing from our local disk
+            while IFS= read -r torrent; do
+                # Derive the download directory name from the torrent filename (strip .torrent suffix)
+                dir="${torrent%.torrent}"
+                # Transmission is aware of this torrent; nothing to do
+                "${HAS_STATUS}" && grep -qF "${dir}" "${STATUS_FILE}" && continue
+                if [[ -d "${ISO_DIR}/${dir}" ]]; then
+                    # Directory is on our local disk but transmission doesn't know about it
+                    "${HAS_STATUS}" && add_update "ORPHAN:${dir}"
+                else
+                    # Directory is not on our local disk and not in transmission
+                    add_update "MISSING:${dir}"
+                fi
+            done <<< "${FEDORA_TRACKER}"
+
+            # Alert on stale Fedora directories on our local disk but removed from the tracker
+            LOCAL_FEDORA=("${ISO_DIR}"/Fedora-*/)
+            if [[ -d "${LOCAL_FEDORA[0]}" ]]; then
+                for dir in "${LOCAL_FEDORA[@]}"; do
+                    dir=$(basename "${dir%/}")
+                    torrent="${dir}.torrent"
+                    # Torrent is still on the tracker; nothing to do
+                    grep -qF "${torrent}" <<< "${FEDORA_TRACKER}" && continue
+                    # Directory is on our local disk but no longer on the tracker
+                    add_update "STALE:${dir}"
+                done
+            fi
+        else
+            add_update "MALFORMED:Fedora Tracker"
+        fi
+    fi
+fi
 
 # Ubuntu ISO check - compare tracker to our local disk
 #
