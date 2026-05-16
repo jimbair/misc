@@ -8,7 +8,7 @@
 # Current versions - alert when these go missing from the upstream mirror
 ARCH='2026.05.01'
 CACHY='260426'
-DEBIAN='13.4.0'
+DEBIAN='13.5.0'
 MINT='22.3'
 PROXMOX6='6.4-1'
 PROXMOX7='7.4-1'
