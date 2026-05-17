@@ -9,6 +9,7 @@
 ARCH='2026.05.01'
 CACHY='260426'
 DEBIAN='13.5.0'
+FEDORA_VERSIONS='42 43 44'
 MINT='22.3'
 PROXMOX6='6.4-1'
 PROXMOX7='7.4-1'
@@ -20,9 +21,6 @@ ALMA8='8.11'
 ALMA9='9.8'
 ALMA10='10.2'
 ALMA11='11.0'
-
-# Fedora versions we actively mirror (space-separated)
-FEDORA_VERSIONS='42 43 44'
 
 # Where transmission stores downloaded torrents
 ISO_DIR='/var/lib/transmission/Downloads'
