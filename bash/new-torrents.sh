@@ -5,22 +5,16 @@
 # This script runs once an hour via cron and raises an alert via healthchecks.io
 # We send the output as a POST to /fail in the event of a non-zero exit.
 
-# Current versions - alert when these go missing from the upstream mirror
+# Simple checks and their current versions
+# We alert when these go missing from the upstream mirror
 ARCH='2026.05.01'
 CACHY='260426'
 DEBIAN='13.5.0'
-FEDORA_VERSIONS='42 43 44'
 MINT='22.3'
 PROXMOX6='6.4-1'
 PROXMOX7='7.4-1'
 PROXMOX8='8.4-1'
 PROXMOX9='9.1-1'
-
-# Upcoming versions - alert when these appear on the upstream mirror
-ALMA8='8.11'
-ALMA9='9.8'
-ALMA10='10.2'
-ALMA11='11.0'
 
 # Where transmission stores downloaded torrents
 ISO_DIR='/var/lib/transmission/Downloads'
@@ -62,10 +56,10 @@ add_update() {
 # Resets failure counters on success.
 #
 # Usage: fetch URL NAME1 PATTERN1 [NAME2 PATTERN2 ...]
-#   URL             - the URL to fetch
-#   NAME/PATTERN    - pairs used to track per-distro failure counts; PATTERN is
-#                     unused by fetch itself but keeps the call signature consistent
-#                     with check_distro so callers can pass "$@" through unchanged.
+#   URL          - the URL to fetch
+#   NAME/PATTERN - pairs used to track per-distro failure counts; PATTERN is
+#                  unused by fetch itself but keeps the call signature consistent
+#                  with check_distro so callers can pass "$@" through unchanged.
 fetch() {
   local URL="${1}"
   shift
@@ -123,17 +117,16 @@ body_ok() {
   fi
 }
 
-# Fetch a distro page and check name/pattern pairs against the response.
+# Fetch a distro page and alert when any name/pattern pair is missing.
 # Supports checking multiple versions in a single fetch (e.g. all Proxmox releases).
 #
-# Usage: check_distro URL MATCH NAME1 PATTERN1 [NAME2 PATTERN2 ...]
-#   URL   - page to fetch
-#   MATCH - "missing": alert when pattern is absent (current release check)
-#           "present": alert when pattern appears (upcoming release check)
-#   Remaining args are name/pattern pairs checked against the fetched page.
+# Usage: check_distro URL NAME1 PATTERN1 [NAME2 PATTERN2 ...]
+#   URL  - page to fetch
+#   NAME - alert name passed to add_update if PATTERN is absent
+#   Remaining args are additional name/pattern pairs checked against the same page.
 check_distro() {
-  local URL="${1}" MATCH="${2}"
-  shift 2
+  local URL="${1}"
+  shift
 
   fetch "${URL}" "$@" || return 1
 
@@ -143,23 +136,15 @@ check_distro() {
   while [[ $# -ge 2 ]]; do
     local NAME="${1}" PATTERN="${2}"
     shift 2
-
-    if [[ "${MATCH}" = "missing" ]]; then
-      # Alert when the expected version string is no longer present
-      grep -q "${PATTERN}" <<< "${BODY}" || add_update "${NAME}"
-    elif [[ "${MATCH}" = "present" ]]; then
-      # Alert when an upcoming version string has appeared
-      grep -q "${PATTERN}" <<< "${BODY}" && add_update "${NAME}"
-    else
-      echo "ERROR: Unsupported check_distro match type '${MATCH}'. Exiting."
-      exit 1
-    fi
+    # Alert when the expected version string is no longer present
+    grep -q "${PATTERN}" <<< "${BODY}" || add_update "${NAME}"
   done
 }
 
 # Walk the tracker torrents for a single Fedora version and compare against
-# local disk and transmission status. Called only for versions confirmed present
-# on both the tracker and in FEDORA_VERSIONS.
+# local disk and transmission status. Called only for versions present on the
+# tracker where at least one local directory already exists for that version,
+# indicating the version is actively being mirrored.
 #
 # Usage: check_fedora_version VER VER_TORRENTS
 #   VER          - the Fedora version number (e.g. 44)
@@ -169,7 +154,7 @@ check_fedora_version() {
 
   # Check each tracker torrent against transmission status and local disk
   while IFS= read -r TORRENT; do
-    # Match against the torrent directories of the same name, minus .torrent
+    # Transmission names downloads after the torrent filename minus the .torrent suffix
     local DIR="${TORRENT%.torrent}"
 
     # Transmission already knows about this torrent; nothing to do
@@ -196,6 +181,273 @@ check_fedora_version() {
     grep -qF "${TORRENT}" <<< "${VER_TORRENTS}" && continue
     # Present locally but removed from the tracker
     add_update "STALE:${DIR}"
+  done
+}
+
+# Fetch and process the Fedora torrent JSON, comparing it against local disk
+# and transmission status.
+#
+# Fedora publishes a JSON of all active torrents at torrent.fedoraproject.org,
+# covering all releases in a single response. Each torrent unpacks into a
+# subdirectory named after the torrent file minus the .torrent suffix, so
+# directory presence is used instead of ISO filename matching.
+#
+# Version tracking is fully dynamic - no FEDORA_VERSIONS variable is needed.
+# The active version set is derived from the union of what the tracker publishes
+# and what exists on local disk, so no script changes are needed when versions
+# are added or removed upstream.
+#
+# Version-level alerts (one alert per version, not one per torrent):
+#   NEW:Fedora-VER     - version appeared in JSON but no local directories exist yet
+#   DROPPED:Fedora-VER - local directories exist for a version absent from the JSON
+#
+# Per-torrent alerts (only once at least one local directory exists for a version):
+#   MISSING:DIR  - torrent directory absent from disk and unknown to transmission
+#   ORPHAN:DIR   - torrent directory present on disk but unknown to transmission
+#   STALE:DIR    - torrent directory present on disk but removed from the tracker
+check_fedora() {
+  fetch "https://torrent.fedoraproject.org/torrents.json" "Fedora" "notused" || return 1
+  body_ok "${DOMAIN}" || return 1
+
+  # Extract the sorted list of release version names currently on the tracker
+  local FEDORA_TRACKER_VERSIONS
+  FEDORA_TRACKER_VERSIONS=$(jq -r '.[].name' <<< "${BODY}" | sort -V)
+
+  if [[ -z "${FEDORA_TRACKER_VERSIONS}" ]]; then
+    add_update "MALFORMED:Fedora Tracker"
+    return 1
+  fi
+
+  # Extract major versions present in local Fedora directories, if any exist.
+  # This forms the local half of the version union used for DROPPED detection.
+  local FEDORA_LOCAL_VERSIONS=()
+  for DIR in "${ISO_DIR}"/Fedora-*-*/; do
+    [[ -d "${DIR}" ]] || continue
+    # Extract the version suffix (e.g. Fedora-Workstation-Live-x86_64-44 -> 44)
+    local VER="${DIR%/}"
+    VER="${VER##*-}"
+    # Add to local versions array if not already present
+    [[ " ${FEDORA_LOCAL_VERSIONS[*]} " == *" ${VER} "* ]] && continue
+    FEDORA_LOCAL_VERSIONS+=("${VER}")
+  done
+
+  # Alert once for each tracker version with no local directories yet (new release).
+  # Once at least one local directory exists, normal per-torrent checks take over.
+  while IFS= read -r VER; do
+    LOCAL_VER_DIRS=("${ISO_DIR}"/Fedora-*-"${VER}"/)
+    if [[ ! -d "${LOCAL_VER_DIRS[0]}" ]]; then
+      add_update "NEW:Fedora-${VER}"
+      continue
+    fi
+
+    # At least one local directory exists for this version; check individual torrents
+    local FEDORA_VER_TORRENTS
+    FEDORA_VER_TORRENTS=$(jq -r --arg V "${VER}" \
+      '.[] | select(.name == $V) | .torrents[].torrent' <<< "${BODY}" | sort)
+    check_fedora_version "${VER}" "${FEDORA_VER_TORRENTS}"
+  done <<< "${FEDORA_TRACKER_VERSIONS}"
+
+  # Alert once for each local version absent from the tracker (dropped release).
+  # Fires on every run until the local directories are removed.
+  for VER in "${FEDORA_LOCAL_VERSIONS[@]}"; do
+    grep -qw "${VER}" <<< "${FEDORA_TRACKER_VERSIONS}" && continue
+    add_update "DROPPED:Fedora-${VER}"
+  done
+}
+
+# Compare the current AlmaLinux point release for a major version against local
+# disk and transmission status. Called only for majors confirmed present on both
+# isos.html and in local directories.
+#
+# A new point release under a tracked major (e.g. 10.2 replacing 10.1) raises a
+# single NEW:AlmaLinux-10.2 alert rather than one MISSING: per arch. Per-arch
+# MISSING:/ORPHAN: checks fire once at least one local directory exists for the
+# current point release. STALE: fires for any local directory whose point release
+# is no longer the current one listed on isos.html.
+#
+# Usage: check_alma_version MAJOR CURRENT_VERSION ARCHES
+#   MAJOR           - the AlmaLinux major version number (e.g. 10)
+#   CURRENT_VERSION - the current full point release from isos.html (e.g. 10.1)
+#   ARCHES          - newline-separated list of arches for this version
+check_alma_version() {
+  local MAJOR="${1}" CURRENT_VERSION="${2}" ARCHES="${3}"
+
+  # Check whether the current point release is present locally. If any arch
+  # directory exists for the current version, the release is considered known.
+  LOCAL_CURRENT=("${ISO_DIR}"/AlmaLinux-"${CURRENT_VERSION}"-*/)
+  if [[ ! -d "${LOCAL_CURRENT[0]}" ]]; then
+    # Current point release not present locally at all; single NEW: alert
+    add_update "NEW:AlmaLinux-${CURRENT_VERSION}"
+    return 0
+  fi
+
+  # Current point release is present; check each arch for MISSING:/ORPHAN:
+  while IFS= read -r ARCH; do
+    local DIR="AlmaLinux-${CURRENT_VERSION}-${ARCH}"
+    "${HAS_STATUS}" && grep -qF "${DIR}" "${STATUS_FILE}" && continue
+    if [[ -d "${ISO_DIR}/${DIR}" ]]; then
+      # Directory exists locally but transmission has no record of it
+      "${HAS_STATUS}" && add_update "ORPHAN:${DIR}"
+    else
+      # Expected arch directory missing from disk and transmission
+      add_update "MISSING:${DIR}"
+    fi
+  done <<< "${ARCHES}"
+
+  # Alert on local directories for this major whose point release is no longer
+  # current on isos.html (i.e. superseded by a newer point release).
+  # The glob is scoped to the major to avoid matching other majors.
+  LOCAL_ALMA=("${ISO_DIR}"/AlmaLinux-"${MAJOR}".*-*/)
+  for DIR in "${LOCAL_ALMA[@]}"; do
+    [[ -d "${DIR}" ]] || continue
+    DIR=$(basename "${DIR%/}")
+    # Extract the version portion (e.g. AlmaLinux-10.0-x86_64 -> 10.0)
+    local VER="${DIR#AlmaLinux-}"
+    VER="${VER%-*}"
+    # Still the current point release; nothing to do
+    [[ "${VER}" == "${CURRENT_VERSION}" ]] && continue
+    # Present locally but superseded by a newer point release
+    add_update "STALE:${DIR}"
+  done
+}
+
+# Fetch and process the AlmaLinux isos.html page, comparing it against local
+# disk and transmission status. No need to track specific versions since we
+# mirror whatever is currently active and latest.
+#
+# isos.html lists the current point release per major version per arch. Sadly,
+# AlmaLinux doesn't have a torrent-specific landing page like Ubuntu or Fedora.
+# The older torrents are never disabled from the tracker like Fedora, but since
+# Alma always rolls, there's no benefit to keeping the older ISOs around.
+#
+# Version-level alerts (one alert per event, not one per arch):
+#   NEW:AlmaLinux-MAJOR   - a new major appeared on isos.html with no local directories
+#   NEW:AlmaLinux-VER     - a new point release exists on isos.html but not locally
+#   DROPPED:AlmaLinux-MAJ - local directories exist for a major absent from isos.html
+#
+# Per version+arch alerts:
+# Only occurs if we have at least 1 torrent of this version locally but some are missing
+#   MISSING:AlmaLinux-VER-ARCH - expected directory absent from disk and transmission
+#   ORPHAN:AlmaLinux-VER-ARCH  - directory present on disk but unknown to transmission
+#   STALE:AlmaLinux-VER-ARCH   - local directory superseded by a newer point release
+check_alma() {
+  fetch "https://mirrors.almalinux.org/isos.html" "AlmaLinux" "notused" || return 1
+  body_ok "${DOMAIN}" || return 1
+
+  # Extract all unique version+arch pairs from isos.html links of the form
+  # /isos/ARCH/VERSION.html, producing lines of "VERSION ARCH" sorted by version
+  local ALMA_PAIRS
+  ALMA_PAIRS=$(grep -oP '/isos/\K[^/]+/[0-9]+\.[0-9]+(?=\.html)' <<< "${BODY}" \
+    | awk -F/ '{print $2, $1}' | sort -V | uniq)
+
+  # I'm sure this will break on us one day
+  if [[ -z "${ALMA_PAIRS}" ]]; then
+    add_update "MALFORMED:AlmaLinux isos.html"
+    return 1
+  fi
+
+  # Extract the unique set of major versions currently listed on isos.html
+  local ALMA_TRACKER_MAJORS
+  ALMA_TRACKER_MAJORS=$(awk '{print $1}' <<< "${ALMA_PAIRS}" \
+    | cut -d. -f1 | sort -uV)
+
+  # Extract the unique set of major versions present in local directories, if any.
+  # This forms the local half of the major version union used for DROPPED detection.
+  local ALMA_LOCAL_MAJORS=()
+  for DIR in "${ISO_DIR}"/AlmaLinux-*.*-*/; do
+    [[ -d "${DIR}" ]] || continue
+    # Extract the major version (e.g. AlmaLinux-10.1-x86_64 -> 10)
+    local MAJ="${DIR%/}"
+    MAJ="${MAJ##*AlmaLinux-}"
+    MAJ="${MAJ%%.*}"
+    # Add to local majors array if not already present
+    [[ " ${ALMA_LOCAL_MAJORS[*]} " == *" ${MAJ} "* ]] && continue
+    ALMA_LOCAL_MAJORS+=("${MAJ}")
+  done
+
+  # Alert once for each major on isos.html with no local directories (new major).
+  # Once at least one local directory exists for that major, point release and
+  # per-arch checks take over.
+  while IFS= read -r MAJOR; do
+    LOCAL_MAJOR_DIRS=("${ISO_DIR}"/AlmaLinux-"${MAJOR}".*-*/)
+    if [[ ! -d "${LOCAL_MAJOR_DIRS[0]}" ]]; then
+      add_update "NEW:AlmaLinux-${MAJOR}"
+      continue
+    fi
+
+    # Major is present locally; extract the current point release and arches
+    # from isos.html and hand off to check_alma_version for validation.
+    local CURRENT_VERSION
+    CURRENT_VERSION=$(awk '{print $1}' <<< "${ALMA_PAIRS}" \
+      | grep "^${MAJOR}\." | sort -V | tail -1)
+
+    local CURRENT_ARCHES
+    CURRENT_ARCHES=$(grep "^${CURRENT_VERSION} " <<< "${ALMA_PAIRS}" \
+      | awk '{print $2}' | sort)
+
+    check_alma_version "${MAJOR}" "${CURRENT_VERSION}" "${CURRENT_ARCHES}"
+  done <<< "${ALMA_TRACKER_MAJORS}"
+
+  # Alert once for each local major absent from isos.html (dropped/EOL major).
+  # Fires on every run until the local directories are removed.
+  for MAJ in "${ALMA_LOCAL_MAJORS[@]}"; do
+    grep -qw "${MAJ}" <<< "${ALMA_TRACKER_MAJORS}" && continue
+    add_update "DROPPED:AlmaLinux-${MAJ}"
+  done
+}
+
+# Fetch and process the Ubuntu torrent tracker page, comparing it against local
+# disk and transmission status.
+#
+# Ubuntu releases ISOs frequently and names them inconsistently across point
+# releases, so we scrape all active non-beta, non-snapshot ISO names from the
+# official tracker and compare against local disk rather than tracking versions.
+#
+# Per-ISO alerts:
+#   MISSING:ISO          - tracker ISO absent from disk and unknown to transmission
+#   ORPHAN:ISO           - tracker ISO present on disk but unknown to transmission
+#   STALE:ISO            - local ubuntu-*.iso no longer listed on the tracker
+#   MISSING:ubuntu-*.iso - no Ubuntu ISOs found on our disk at all
+check_ubuntu() {
+  fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" "notused" || return 1
+  body_ok "${DOMAIN}" || return 1
+
+  local UBUNTU_TRACKER
+  UBUNTU_TRACKER=$(grep -vE "beta|snapshot" <<< "${BODY}" | grep -oP '(?<=>)[^<]+\.iso(?=<)')
+
+  if [[ -z "${UBUNTU_TRACKER}" ]]; then
+    add_update "MALFORMED:Ubuntu Tracker"
+    return 1
+  fi
+
+  # Alert on tracker ISOs missing from local disk or unknown to transmission
+  while IFS= read -r ISO; do
+    "${HAS_STATUS}" && grep -qF "${ISO}" "${STATUS_FILE}" && continue
+    if [[ -s "${ISO_DIR}/${ISO}" ]]; then
+      # ISO is on disk but transmission has no record of it
+      "${HAS_STATUS}" && add_update "ORPHAN:${ISO}"
+    else
+      # Not on disk and not in transmission; needs to be downloaded
+      add_update "MISSING:${ISO}"
+    fi
+  done <<< "${UBUNTU_TRACKER}"
+
+  # Alert on local ubuntu-*.iso files no longer listed on the tracker
+  local LOCAL_ISOS
+  LOCAL_ISOS=("${ISO_DIR}"/ubuntu-*.iso)
+  if [[ ! -s "${LOCAL_ISOS[0]}" ]]; then
+    # The glob matched nothing; no Ubuntu ISOs on disk at all
+    add_update "MISSING:ubuntu-*.iso"
+    return 0
+  fi
+
+  for FILE in "${LOCAL_ISOS[@]}"; do
+    local ISO
+    ISO=$(basename "${FILE}")
+    # Still on the tracker; nothing to do
+    grep -qF "${ISO}" <<< "${UBUNTU_TRACKER}" && continue
+    # Present locally but removed from the tracker
+    add_update "STALE:${ISO}"
   done
 }
 
@@ -228,122 +480,24 @@ fi
 [[ "${1}" == "--debug" ]] && set -x
 
 # Simple page-scrape checks: fetch each URL once and look for the version string
-check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"          missing  "Arch"       "${ARCH}"
-check_distro "https://cachyos.org/download/"                               missing  "CachyOS"    "${CACHY}"
-check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/"  missing  "Debian"     "${DEBIAN}"
-check_distro "https://linuxmint.com/download.php"                          missing  "Linux Mint" "${MINT}"
+check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"          "Arch"       "${ARCH}"
+check_distro "https://cachyos.org/download/"                               "CachyOS"    "${CACHY}"
+check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/"  "Debian"     "${DEBIAN}"
+check_distro "https://linuxmint.com/download.php"                          "Linux Mint" "${MINT}"
 
 # Single fetch for all four Proxmox versions
-check_distro "https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso" missing \
+check_distro "https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso" \
   "Proxmox 6" "${PROXMOX6}" \
   "Proxmox 7" "${PROXMOX7}" \
   "Proxmox 8" "${PROXMOX8}" \
   "Proxmox 9" "${PROXMOX9}"
 
-# Single fetch for all tracked and upcoming Alma versions
-check_distro "https://mirror.rackspace.com/almalinux/" present \
-  "Alma 8"  "${ALMA8}"  \
-  "Alma 9"  "${ALMA9}"  \
-  "Alma 10" "${ALMA10}" \
-  "Alma 11" "${ALMA11}"
+# More bespoke, involved checks to monitor multiple versions at once
+check_fedora
+check_alma
+check_ubuntu
 
-# Fedora torrent check - compare tracker JSON to local disk and transmission status.
-#
-# Fedora publishes a JSON of all active torrents at torrent.fedoraproject.org making it
-# straightforward to detect version-level changes without scraping multiple pages.
-#
-# Each torrent unpacks into a subdirectory named after the torrent file (minus
-# the .torrent suffix), so directory presence is used instead of ISO filename matching.
-#
-# Version-level alerts (one alert per event, not one per torrent):
-#   NEW:Fedora-VER     - a version not in FEDORA_VERSIONS appeared on the tracker
-#   DROPPED:Fedora-VER - a version in FEDORA_VERSIONS is no longer on the tracker
-#
-# Per-torrent alerts (only for versions present in both FEDORA_VERSIONS and tracker):
-#   MISSING:DIR  - torrent directory absent from disk and unknown to transmission
-#   ORPHAN:DIR   - torrent directory present on disk but unknown to transmission
-#   STALE:DIR    - torrent directory present on disk but removed from the tracker
-
-fetch "https://torrent.fedoraproject.org/torrents.json" "Fedora" "notused"
-
-if [[ $? -eq 0 ]]; then
-  # Extract the sorted list of release version names currently on the tracker
-  FEDORA_TRACKER_VERSIONS=$(jq -r '.[].name' <<< "${BODY}" | sort -V)
-
-  if [[ -z "${FEDORA_TRACKER_VERSIONS}" ]]; then
-    add_update "MALFORMED:Fedora Tracker"
-  else
-    # Alert if we find version(s) not listed in FEDORA_VERSIONS (new release)
-    while IFS= read -r VER; do
-      grep -qw "${VER}" <<< "${FEDORA_VERSIONS}" && continue
-      add_update "NEW:Fedora-${VER}"
-    done <<< "${FEDORA_TRACKER_VERSIONS}"
-
-    # Alert if we find version(s) in FEDORA_VERSIONS missing (EOL'd release)
-    for VER in ${FEDORA_VERSIONS}; do
-      if ! grep -qw "${VER}" <<< "${FEDORA_TRACKER_VERSIONS}"; then
-        add_update "DROPPED:Fedora-${VER}"
-        continue
-      fi
-
-      # Version is present on both sides; check the individual torrents
-      FEDORA_VER_TORRENTS=$(jq -r --arg V "${VER}" \
-        '.[] | select(.name == $V) | .torrents[].torrent' <<< "${BODY}" | sort)
-      check_fedora_version "${VER}" "${FEDORA_VER_TORRENTS}"
-    done
-  fi
-fi
-
-# Ubuntu ISO check - compare tracker to local disk and transmission status.
-#
-# Ubuntu releases ISOs frequently and names them inconsistently across point
-# releases, so we scrape all active non-beta, non-snapshot ISO names from the
-# official tracker and compare against local disk rather than tracking versions.
-#
-# Per-ISO alerts:
-#   MISSING:ISO          - tracker ISO absent from disk and unknown to transmission
-#   ORPHAN:ISO           - tracker ISO present on disk but unknown to transmission
-#   STALE:ISO            - local ubuntu-*.iso no longer listed on the tracker
-#   MISSING:ubuntu-*.iso - no Ubuntu ISOs found on our disk at all
-
-fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" "notused"
-
-if [[ $? -eq 0 ]]; then
-  UBUNTU_TRACKER=$(grep -vE "beta|snapshot" <<< "${BODY}" | grep -oP '(?<=>)[^<]+\.iso(?=<)')
-
-  if [[ -z "${UBUNTU_TRACKER}" ]]; then
-    add_update "MALFORMED:Ubuntu Tracker"
-  else
-    # Alert on tracker ISOs missing from local disk or unknown to transmission
-    while IFS= read -r ISO; do
-      "${HAS_STATUS}" && grep -qF "${ISO}" "${STATUS_FILE}" && continue
-      if [[ -s "${ISO_DIR}/${ISO}" ]]; then
-        # ISO is on disk but transmission has no record of it
-        "${HAS_STATUS}" && add_update "ORPHAN:${ISO}"
-      else
-        # Not on disk and not in transmission; needs to be downloaded
-        add_update "MISSING:${ISO}"
-      fi
-    done <<< "${UBUNTU_TRACKER}"
-
-    # Alert on local ubuntu-*.iso files no longer listed on the tracker
-    LOCAL_ISOS=("${ISO_DIR}"/ubuntu-*.iso)
-    if [[ ! -s "${LOCAL_ISOS[0]}" ]]; then
-      # The glob matched nothing; no Ubuntu ISOs on disk at all
-      add_update "MISSING:ubuntu-*.iso"
-    else
-      for FILE in "${LOCAL_ISOS[@]}"; do
-        ISO=$(basename "${FILE}")
-        # Still on the tracker; nothing to do
-        grep -qF "${ISO}" <<< "${UBUNTU_TRACKER}" && continue
-        # Present locally but removed from the tracker
-        add_update "STALE:${ISO}"
-      done
-    fi
-  fi
-fi
-
-# Report any alerts if present and exit non-zero
+# Report all accumulated alerts and exit non-zero so healthchecks.io fires
 if [[ -n "${UPDATES}" ]]; then
   echo "${UPDATES}"
   exit 1
