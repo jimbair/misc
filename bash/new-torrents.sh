@@ -148,9 +148,14 @@ check_distro() {
 # version numbers manually. ISOs land as flat files in ISO_DIR, named
 # archlinux-YYYY.MM.DD-x86_64.iso, matching the transmission download name.
 #
+# Arch publishes one new torrent monthly. However, older ISOs are superseded
+# by each monthly release and serve no functional purpose as pacman will roll
+# any installed system to current regardless of which ISO was used.
+#
 # Alerts:
-#   NEW:Arch-YYYY.MM.DD            - current release not present on local disk
-#   STALE:archlinux-OLD-x86_64.iso - local ISO superseded by a newer release
+#   NEW:Arch-YYYY.MM.DD              - current release not present on local disk
+#   ORPHAN:archlinux-YYYY-x86_64.iso - current ISO on disk but unknown to transmission
+#   STALE:archlinux-OLD-x86_64.iso   - local ISO superseded by a newer release
 check_arch() {
   fetch "https://archlinux.org/download/" "Arch" "notused" || return 1
   body_ok "${DOMAIN}" || return 1
@@ -167,8 +172,13 @@ check_arch() {
 
   local CURRENT_ISO="archlinux-${CURRENT_RELEASE}-x86_64.iso"
 
-  # Alert if the current release ISO is not present on local disk
-  if [[ ! -s "${ISO_DIR}/${CURRENT_ISO}" ]]; then
+  # Check the current release ISO against transmission status and local disk
+  "${HAS_STATUS}" && grep -qF "${CURRENT_ISO}" "${STATUS_FILE}" && return 0
+  if [[ -s "${ISO_DIR}/${CURRENT_ISO}" ]]; then
+    # ISO is on disk but transmission has no record of it
+    "${HAS_STATUS}" && add_update "ORPHAN:${CURRENT_ISO}"
+  else
+    # Not on our disk our in transmission; a new torrent has entered the chat
     add_update "NEW:Arch-${CURRENT_RELEASE}"
   fi
 
