@@ -7,7 +7,6 @@
 
 # Simple checks and their current versions
 # We alert when these go missing from the upstream mirror
-ARCH='2026.05.01'
 CACHY='260426'
 DEBIAN='13.5.0'
 MINT='22.3'
@@ -141,6 +140,48 @@ check_distro() {
   done
 }
 
+# Fetch and process the Arch Linux download page, comparing the current release
+# against torrent(s) on our local disk.
+#
+# archlinux.org/download/ lists the current release date as a structured field,
+# making it straightforward to extract without scraping multiple pages or tracking
+# version numbers manually. ISOs land as flat files in ISO_DIR, named
+# archlinux-YYYY.MM.DD-x86_64.iso, matching the transmission download name.
+#
+# Alerts:
+#   NEW:Arch-YYYY.MM.DD            - current release not present on local disk
+#   STALE:archlinux-OLD-x86_64.iso - local ISO superseded by a newer release
+check_arch() {
+  fetch "https://archlinux.org/download/" "Arch" "notused" || return 1
+  body_ok "${DOMAIN}" || return 1
+
+  # Extract the current release date from the structured field on the download page
+  local CURRENT_RELEASE
+  CURRENT_RELEASE=$(grep -oP '(?<=Current Release:</strong> )\d{4}\.\d{2}\.\d{2}' <<< "${BODY}")
+
+  # I'm sure this will break on us one day
+  if [[ -z "${CURRENT_RELEASE}" ]]; then
+    add_update "MALFORMED:archlinux.org"
+    return 1
+  fi
+
+  local CURRENT_ISO="archlinux-${CURRENT_RELEASE}-x86_64.iso"
+
+  # Alert if the current release ISO is not present on local disk
+  if [[ ! -s "${ISO_DIR}/${CURRENT_ISO}" ]]; then
+    add_update "NEW:Arch-${CURRENT_RELEASE}"
+  fi
+
+  # Alert on any local Arch ISOs that are no longer the current release
+  for FILE in "${ISO_DIR}"/archlinux-*.iso; do
+    [[ -s "${FILE}" ]] || continue
+    local ISO
+    ISO=$(basename "${FILE}")
+    [[ "${ISO}" == "${CURRENT_ISO}" ]] && continue
+    add_update "STALE:${ISO}"
+  done
+}
+
 # Walk the tracker torrents for a single Fedora version and compare against
 # local disk and transmission status. Called only for versions present on the
 # tracker where at least one local directory already exists for that version,
@@ -213,12 +254,13 @@ check_fedora() {
   local FEDORA_TRACKER_VERSIONS
   FEDORA_TRACKER_VERSIONS=$(jq -r '.[].name' <<< "${BODY}" | sort -V)
 
+  # I'm sure this will break on us one day
   if [[ -z "${FEDORA_TRACKER_VERSIONS}" ]]; then
     add_update "MALFORMED:Fedora Tracker"
     return 1
   fi
 
-  # Extract major versions present in local Fedora directories, if any exist.
+  # Extract versions present in local Fedora directories, if any exist.
   # This forms the local half of the version union used for DROPPED detection.
   local FEDORA_LOCAL_VERSIONS=()
   for DIR in "${ISO_DIR}"/Fedora-*-*/; do
@@ -415,6 +457,7 @@ check_ubuntu() {
   local UBUNTU_TRACKER
   UBUNTU_TRACKER=$(grep -vE "beta|snapshot" <<< "${BODY}" | grep -oP '(?<=>)[^<]+\.iso(?=<)')
 
+  # I'm sure this will break on us one day
   if [[ -z "${UBUNTU_TRACKER}" ]]; then
     add_update "MALFORMED:Ubuntu Tracker"
     return 1
@@ -480,7 +523,6 @@ fi
 [[ "${1}" == "--debug" ]] && set -x
 
 # Simple page-scrape checks: fetch each URL once and look for the version string
-check_distro "https://mirror.rackspace.com/archlinux/iso/latest/"          "Arch"       "${ARCH}"
 check_distro "https://cachyos.org/download/"                               "CachyOS"    "${CACHY}"
 check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/"  "Debian"     "${DEBIAN}"
 check_distro "https://linuxmint.com/download.php"                          "Linux Mint" "${MINT}"
@@ -493,6 +535,7 @@ check_distro "https://www.proxmox.com/en/downloads/proxmox-virtual-environment/i
   "Proxmox 9" "${PROXMOX9}"
 
 # More bespoke, involved checks to monitor multiple versions at once
+check_arch
 check_fedora
 check_alma
 check_ubuntu
