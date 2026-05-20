@@ -10,10 +10,6 @@
 CACHY='260426'
 DEBIAN='13.5.0'
 MINT='22.3'
-PROXMOX6='6.4-1'
-PROXMOX7='7.4-1'
-PROXMOX8='8.4-1'
-PROXMOX9='9.1-1'
 
 # Where transmission stores downloaded torrents
 ISO_DIR='/var/lib/transmission/Downloads'
@@ -514,6 +510,73 @@ check_ubuntu() {
   done
 }
 
+# Fetch and process the Proxmox VE downloads page, comparing it against local
+# disk and transmission status.
+#
+# The parent downloads page lists only actively supported ISO versions, while
+# the /iso subpage also includes EOL releases. We use the parent page so that
+# EOL versions are automatically detected as stale once Proxmox removes them.
+#
+# Version strings are extracted via the MAJOR.MINOR-PATCH pattern (e.g. 9.1-1)
+# which uniquely identifies ISO releases on the page. Local ISOs follow the
+# naming convention proxmox-ve_X.Y-Z.iso.
+#
+# Alerts:
+#   NEW:Proxmox-X.Y-Z              - version on page but no local ISO exists
+#   ORPHAN:proxmox-ve_X.Y-Z.iso    - ISO on disk but unknown to transmission
+#   STALE:proxmox-ve_X.Y-Z.iso     - local ISO superseded by a newer point release
+#   DROPPED:Proxmox-MAJOR          - local ISOs exist for a major absent from the page
+check_proxmox() {
+  fetch "https://www.proxmox.com/en/downloads/proxmox-virtual-environment" "Proxmox" "notused" || return 1
+  body_ok "${DOMAIN}" || return 1
+
+  # Extract unique ISO version strings (MAJOR.MINOR-PATCH format)
+  local PROXMOX_VERSIONS
+  PROXMOX_VERSIONS=$(grep -oP '\d+\.\d+-\d+' <<< "${BODY}" | sort -uV)
+
+  # I'm sure this will break on us one day
+  if [[ -z "${PROXMOX_VERSIONS}" ]]; then
+    add_update "MALFORMED:Proxmox-Downloads"
+    return 1
+  fi
+
+  # Extract the set of major versions listed on the page
+  local PROXMOX_PAGE_MAJORS
+  PROXMOX_PAGE_MAJORS=$(cut -d. -f1 <<< "${PROXMOX_VERSIONS}" | sort -uV)
+
+  # For each version on the page, check local disk and transmission status
+  while IFS= read -r VER; do
+    local ISO="proxmox-ve_${VER}.iso"
+    "${HAS_STATUS}" && grep -qF "${ISO}" "${STATUS_FILE}" && continue
+    if [[ -s "${ISO_DIR}/${ISO}" ]]; then
+      "${HAS_STATUS}" && add_update "ORPHAN:${ISO}"
+    else
+      add_update "NEW:Proxmox-${VER}"
+    fi
+  done <<< "${PROXMOX_VERSIONS}"
+
+  # Check local Proxmox ISOs against the page versions.
+  # Alert STALE for ISOs whose major is still listed but point release is outdated,
+  # and DROPPED for ISOs whose major version is entirely absent from the page.
+  for FILE in "${ISO_DIR}"/proxmox-ve_*.iso; do
+    [[ -s "${FILE}" ]] || continue
+    local ISO
+    ISO=$(basename "${FILE}")
+    # Extract version from filename (proxmox-ve_9.1-1.iso -> 9.1-1)
+    local VER="${ISO#proxmox-ve_}"
+    VER="${VER%.iso}"
+    # Still listed on the page; nothing to do
+    grep -qF "${VER}" <<< "${PROXMOX_VERSIONS}" && continue
+    # Determine if this is a stale point release or a dropped major
+    local MAJOR="${VER%%.*}"
+    if grep -qF "${MAJOR}" <<< "${PROXMOX_PAGE_MAJORS}"; then
+      add_update "STALE:${ISO}"
+    else
+      add_update "DROPPED:Proxmox-${MAJOR}"
+    fi
+  done
+}
+
 ########
 # MAIN #
 ########
@@ -547,18 +610,12 @@ check_distro "https://cachyos.org/download/"                               "Cach
 check_distro "https://cdimage.debian.org/debian-cd/current/amd64/iso-cd/"  "Debian"     "${DEBIAN}"
 check_distro "https://linuxmint.com/download.php"                          "Linux Mint" "${MINT}"
 
-# Single fetch for all four Proxmox versions
-check_distro "https://www.proxmox.com/en/downloads/proxmox-virtual-environment/iso" \
-  "Proxmox 6" "${PROXMOX6}" \
-  "Proxmox 7" "${PROXMOX7}" \
-  "Proxmox 8" "${PROXMOX8}" \
-  "Proxmox 9" "${PROXMOX9}"
-
 # More bespoke, involved checks to monitor multiple versions at once
 check_arch
 check_fedora
 check_alma
 check_ubuntu
+check_proxmox
 
 # Report all accumulated alerts and exit non-zero so healthchecks.io fires
 if [[ -n "${UPDATES}" ]]; then
