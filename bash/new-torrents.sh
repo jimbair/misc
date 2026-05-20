@@ -2,7 +2,7 @@
 # Check for updates to torrents for our mirror
 # https://mirror.tsue.net/
 #
-# This script runs once an hour via cron and raises an alert via healthchecks.io
+# This script runs once an hour via cron and raises alerts via healthchecks.io
 # We send the output as a POST to /fail in the event of a non-zero exit.
 
 # Simple checks and their current versions
