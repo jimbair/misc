@@ -78,13 +78,13 @@ fetch() {
     while [[ $# -ge 2 ]]; do
       local NAME="${1}"
       shift 2
-      COUNT=$(grep "^${NAME}=" "${FAIL_FILE}" | cut -d= -f2)
+      COUNT=$(grep -F "${NAME}=" "${FAIL_FILE}" | cut -d= -f2)
       COUNT=$(( ${COUNT:-0} + 1 ))
-      if grep -q "^${NAME}=" "${FAIL_FILE}"; then
-        sed -i "s/^${NAME}=.*/${NAME}=${COUNT}/" "${FAIL_FILE}"
-      else
-        echo "${NAME}=${COUNT}" >> "${FAIL_FILE}"
+      if grep -qF "${NAME}=" "${FAIL_FILE}"; then
+        grep -vF "${NAME}=" "${FAIL_FILE}" > "${FAIL_FILE}.tmp"
+        mv "${FAIL_FILE}.tmp" "${FAIL_FILE}"
       fi
+      echo "${NAME}=${COUNT}" >> "${FAIL_FILE}"
       [[ "${COUNT}" -ge "${FAIL_THRESHOLD}" ]] && add_update "${DOMAIN}"
     done
     return 1
@@ -96,8 +96,9 @@ fetch() {
   while [[ $# -ge 2 ]]; do
     local NAME="${1}"
     shift 2
-    if grep -q "^${NAME}=" "${FAIL_FILE}"; then
-      sed -i "/^${NAME}=/d" "${FAIL_FILE}"
+    if grep -qF "${NAME}=" "${FAIL_FILE}"; then
+      grep -vF "${NAME}=" "${FAIL_FILE}" > "${FAIL_FILE}.tmp"
+      mv "${FAIL_FILE}.tmp" "${FAIL_FILE}"
     fi
   done
 }
@@ -138,7 +139,7 @@ check_distro() {
     local NAME="${1}" PATTERN="${2}"
     shift 2
     # Alert when the expected version string is no longer present
-    grep -q "${PATTERN}" <<< "${BODY}" || add_update "${NAME}"
+    grep -qF "${PATTERN}" <<< "${BODY}" || add_update "${NAME}"
   done
 }
 
@@ -274,7 +275,7 @@ check_fedora() {
 
   # I'm sure this will break on us one day
   if [[ -z "${FEDORA_TRACKER_VERSIONS}" ]]; then
-    add_update "MALFORMED:Fedora Tracker"
+    add_update "MALFORMED:Fedora-Tracker"
     return 1
   fi
 
@@ -403,7 +404,7 @@ check_alma() {
 
   # I'm sure this will break on us one day
   if [[ -z "${ALMA_PAIRS}" ]]; then
-    add_update "MALFORMED:AlmaLinux isos.html"
+    add_update "MALFORMED:AlmaLinux-isos.html"
     return 1
   fi
 
@@ -478,7 +479,7 @@ check_ubuntu() {
 
   # I'm sure this will break on us one day
   if [[ -z "${UBUNTU_TRACKER}" ]]; then
-    add_update "MALFORMED:Ubuntu Tracker"
+    add_update "MALFORMED:Ubuntu-Tracker"
     return 1
   fi
 
