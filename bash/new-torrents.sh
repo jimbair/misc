@@ -172,17 +172,23 @@ check_arch() {
 
   local CURRENT_ISO="archlinux-${CURRENT_RELEASE}-x86_64.iso"
 
-  # Check the current release ISO against transmission status and local disk
-  "${HAS_STATUS}" && grep -qF "${CURRENT_ISO}" "${STATUS_FILE}" && return 0
-  if [[ -s "${ISO_DIR}/${CURRENT_ISO}" ]]; then
-    # ISO is on disk but transmission has no record of it
-    "${HAS_STATUS}" && add_update "ORPHAN:${CURRENT_ISO}"
-  else
-    # Not on our disk our in transmission; a new torrent has entered the chat
-    add_update "NEW:Arch-${CURRENT_RELEASE}"
+  # Check the current release ISO against transmission status and local disk.
+  # If transmission knows about it, nothing to do. Otherwise fall back to
+  # filesystem checks so a broken status.txt does not suppress NEW alerts.
+  "${HAS_STATUS}" && grep -qF "${CURRENT_ISO}" "${STATUS_FILE}"
+  if [[ $? -ne 0 ]]; then
+    if [[ -s "${ISO_DIR}/${CURRENT_ISO}" ]]; then
+      # ISO is on disk but transmission has no record of it
+      "${HAS_STATUS}" && add_update "ORPHAN:${CURRENT_ISO}"
+    else
+      # Not on disk and not in transmission; needs to be downloaded
+      add_update "NEW:Arch-${CURRENT_RELEASE}"
+    fi
   fi
 
-  # Alert on any local Arch ISOs that are no longer the current release
+  # Alert on any local Arch ISOs that are no longer the current release.
+  # Runs unconditionally so stale ISOs are caught even when the current one
+  # is already known to transmission.
   for FILE in "${ISO_DIR}"/archlinux-*.iso; do
     [[ -s "${FILE}" ]] || continue
     local ISO
@@ -328,27 +334,28 @@ check_alma_version() {
   # directory exists for the current version, the release is considered known.
   LOCAL_CURRENT=("${ISO_DIR}"/AlmaLinux-"${CURRENT_VERSION}"-*/)
   if [[ ! -d "${LOCAL_CURRENT[0]}" ]]; then
-    # Current point release not present locally at all; single NEW: alert
+    # Current point release has no local directories yet; alert and skip
+    # per-arch checks since there is nothing to compare against until we
+    # have at least one directory for this version.
     add_update "NEW:AlmaLinux-${CURRENT_VERSION}"
-    return 0
+  else
+    # Current point release is present; check each arch for MISSING:/ORPHAN:
+    # This helps us find if a new arch sneaks in similar to new Fedora spins
+    while IFS= read -r ARCH; do
+      local DIR="AlmaLinux-${CURRENT_VERSION}-${ARCH}"
+      "${HAS_STATUS}" && grep -qF "${DIR}" "${STATUS_FILE}" && continue
+      if [[ -d "${ISO_DIR}/${DIR}" ]]; then
+        # Directory exists locally but transmission has no record of it
+        "${HAS_STATUS}" && add_update "ORPHAN:${DIR}"
+      else
+        # Expected arch directory missing from disk and transmission
+        add_update "MISSING:${DIR}"
+      fi
+    done <<< "${ARCHES}"
   fi
 
-  # Current point release is present; check each arch for MISSING:/ORPHAN:
-  while IFS= read -r ARCH; do
-    local DIR="AlmaLinux-${CURRENT_VERSION}-${ARCH}"
-    "${HAS_STATUS}" && grep -qF "${DIR}" "${STATUS_FILE}" && continue
-    if [[ -d "${ISO_DIR}/${DIR}" ]]; then
-      # Directory exists locally but transmission has no record of it
-      "${HAS_STATUS}" && add_update "ORPHAN:${DIR}"
-    else
-      # Expected arch directory missing from disk and transmission
-      add_update "MISSING:${DIR}"
-    fi
-  done <<< "${ARCHES}"
-
-  # Alert on local directories for this major whose point release is no longer
-  # current on isos.html (i.e. superseded by a newer point release).
-  # The glob is scoped to the major to avoid matching other majors.
+  # Alert on local directories for this major version whose point release
+  # is no longer current on isos.html (i.e. superseded by a newer point release).
   LOCAL_ALMA=("${ISO_DIR}"/AlmaLinux-"${MAJOR}".*-*/)
   for DIR in "${LOCAL_ALMA[@]}"; do
     [[ -d "${DIR}" ]] || continue
