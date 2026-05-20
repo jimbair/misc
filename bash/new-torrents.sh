@@ -91,7 +91,7 @@ fetch() {
   fi
 
   # On success, check for and clear any counters that need to be cleared
-  # if we have any stored for this check
+  # if we have any stored for this check. Skip completely if the file is empty.
   [[ ! -s "${FAIL_FILE}" ]] && return 0
   while [[ $# -ge 2 ]]; do
     local NAME="${1}"
