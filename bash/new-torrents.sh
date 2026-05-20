@@ -70,6 +70,7 @@ fetch() {
   # Fetch the URL; result is available globally as BODY
   BODY=$(curl --silent --max-time 10 --fail-with-body "${URL}")
 
+  # On failure, either create a counter or increment an existing counter
   if [[ $? -ne 0 ]]; then
     BODY=""
     touch "${FAIL_FILE}"
@@ -89,13 +90,14 @@ fetch() {
     return 1
   fi
 
-  # On success, reset failure counters for all names if the fail file has data
+  # On success, check for and clear any counters that need to be cleared
+  # if we have any stored for this check
   [[ ! -s "${FAIL_FILE}" ]] && return 0
   while [[ $# -ge 2 ]]; do
     local NAME="${1}"
     shift 2
     if grep -q "^${NAME}=" "${FAIL_FILE}"; then
-      sed -i "s/^${NAME}=.*/${NAME}=0/" "${FAIL_FILE}"
+      sed -i "/^${NAME}=/d" "${FAIL_FILE}"
     fi
   done
 }
