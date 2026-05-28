@@ -3,7 +3,8 @@
 # A simple script to alert me if I need to update plex on our nas
 
 # Can also be extracted locally but the api validates that our service is up
-INSTALLED=$(curl -s "http://localhost:32400/identity" | grep -oP '<MediaContainer[^>]+version="\K[^"]+')
+INSTALLED=$(curl -s "http://localhost:32400/identity" | grep -oP \
+  '<MediaContainer[^>]+version="\K[^"]+')
 if [ -z "$INSTALLED" ]; then
   echo "Could not read installed Plex version from local API."
   exit 1
