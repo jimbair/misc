@@ -36,12 +36,12 @@ add_update() {
   local NEW=$1
 
   # Skip if already present to avoid duplicate alerts
-  grep -qFw "${NEW}" <<< "${UPDATES}" && return
+  grep -qFx "${NEW}" <<< "${UPDATES}" && return
 
   if [[ -z "${UPDATES}" ]]; then
     UPDATES="${NEW}"
   else
-    UPDATES="${UPDATES} ${NEW}"
+    UPDATES="${UPDATES}"$'\n'"${NEW}"
   fi
 }
 
