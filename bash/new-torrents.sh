@@ -8,7 +8,6 @@
 # Simple checks and their current versions
 # We alert when these go missing from the upstream mirror
 CACHY='260426'
-MINT='22.3'
 
 # Where transmission stores downloaded torrents
 ISO_DIR='/var/lib/transmission/Downloads'
@@ -63,7 +62,7 @@ fetch() {
   DOMAIN=$(awk -F[/:] '{print $4}' <<< "${URL}")
 
   # Fetch the URL; result is available globally as BODY
-  BODY=$(curl --silent --max-time 10 --fail-with-body "${URL}")
+  BODY=$(curl --silent --max-time 10 --compressed --fail-with-body "${URL}")
 
   # On failure, either create a counter or increment an existing counter
   if [[ $? -ne 0 ]]; then
@@ -177,6 +176,81 @@ check_dir() {
   else
     add_update "NEW:${DIR}"
   fi
+}
+
+# Fetch and process the Linux Mint stable file index, comparing active ISOs
+# against local disk and transmission status.
+#
+# pub.linuxmint.io/stable/ is a plain directory index listing all historical
+# release version directories. The latest version is determined by taking the
+# highest version directory via sort -V. The version directory itself lists the
+# current ISOs directly as flat files, matching the names transmission uses.
+#
+# This approach requires two fetches but is more reliable than scraping the
+# main download page or per-edition subpages, which load content dynamically
+# and have been observed to 404 for some editions (e.g. the EDGE ISO). If EDGE
+# or any other variant appears in the version directory it will be picked up
+# automatically without any script changes.
+#
+# Per-ISO alerts:
+#   NEW:ISO                  - index ISO absent from disk and unknown to transmission
+#   ORPHAN:ISO               - index ISO present on disk but unknown to transmission
+#   STALE:ISO                - local linuxmint-*.iso not present in current version directory
+#   MISSING:linuxmint-*.iso  - no Linux Mint ISOs found on our disk at all
+#   MALFORMED:Linux-Mint     - stable index returned no version directories
+#   MALFORMED:Linux-Mint-VER - version directory returned no ISOs
+check_mint() {
+  fetch "https://pub.linuxmint.io/stable/" "Linux Mint" "notused" || return 1
+  body_ok "${DOMAIN}" || return 1
+
+  # Extract the latest version directory from the stable index
+  local CURRENT_VERSION
+  CURRENT_VERSION=$(grep -oP 'href="\K[0-9]+\.[0-9]+(?=/)' <<< "${BODY}" | sort -V | tail -1)
+
+  # I'm sure this will break on us one day
+  if [[ -z "${CURRENT_VERSION}" ]]; then
+    add_update "MALFORMED:Linux-Mint"
+    return 1
+  fi
+
+  # Fetch the version directory to get the current ISO listing
+  fetch "https://pub.linuxmint.io/stable/${CURRENT_VERSION}/" "Linux Mint" "notused" || return 1
+  body_ok "${DOMAIN}" || return 1
+
+  local MINT_TRACKER
+  MINT_TRACKER=$(grep -oP 'href="\Klinuxmint-[^"]+\.iso(?=")' <<< "${BODY}" | sort)
+
+  # I'm sure this will break on us one day
+  if [[ -z "${MINT_TRACKER}" ]]; then
+    add_update "MALFORMED:Linux-Mint-${CURRENT_VERSION}"
+    return 1
+  fi
+
+  # Alert on index ISOs missing from local disk or unknown to transmission
+  while IFS= read -r ISO; do
+    check_iso "${ISO}"
+  done <<< "${MINT_TRACKER}"
+
+  # Alert on local linuxmint-*.iso files no longer present in the current version directory
+  local LOCAL_ISOS
+  LOCAL_ISOS=("${ISO_DIR}"/linuxmint-*.iso)
+
+  # The glob matched nothing; no Linux Mint ISOs on disk at all
+  if [[ ! -s "${LOCAL_ISOS[0]}" ]]; then
+    add_update "MISSING:linuxmint-*.iso"
+    return 0
+  fi
+
+  for FILE in "${LOCAL_ISOS[@]}"; do
+    local ISO
+    ISO=$(basename "${FILE}")
+
+    # Still present in the current version directory; nothing to do
+    grep -qF "${ISO}" <<< "${MINT_TRACKER}" && continue
+
+    # Local ISO is no longer listed in the current version directory
+    add_update "STALE:${ISO}"
+  done
 }
 
 # Fetch and process the Arch Linux download page, comparing the current release
@@ -724,10 +798,10 @@ fi
 [[ "${1}" == "--debug" ]] && set -x
 
 # Simple page-scrape checks: fetch each URL once and look for the version string
-check_distro "https://cachyos.org/download/"      "CachyOS"    "${CACHY}"
-check_distro "https://linuxmint.com/download.php" "Linux Mint" "${MINT}"
+check_distro "https://cachyos.org/download/"   "CachyOS"    "${CACHY}"
 
 # More bespoke, involved checks to monitor multiple versions at once
+check_mint
 check_arch
 check_fedora
 check_alma
