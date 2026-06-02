@@ -5,10 +5,6 @@
 # This script runs once an hour via cron and raises alerts via healthchecks.io
 # We send the output as a POST to /fail in the event of a non-zero exit.
 
-# Simple checks and their current versions
-# We alert when these go missing from the upstream mirror
-CACHY='260426'
-
 # Where transmission stores downloaded torrents
 ISO_DIR='/var/lib/transmission/Downloads'
 
@@ -111,30 +107,6 @@ body_ok() {
     add_update "${ALERT_NAME}"
     return 1
   fi
-}
-
-# Fetch a distro page and alert when any name/pattern pair is missing.
-# Supports checking multiple versions in a single fetch (e.g. all Proxmox releases).
-#
-# Usage: check_distro URL NAME1 PATTERN1 [NAME2 PATTERN2 ...]
-#   URL  - page to fetch
-#   NAME - alert name passed to add_update if PATTERN is absent
-#   Remaining args are additional name/pattern pairs checked against the same page.
-check_distro() {
-  local URL="${1}"
-  shift
-
-  fetch "${URL}" "$@" || return 1
-
-  # A very short response suggests an error page rather than real content
-  body_ok "${DOMAIN}" || return 1
-
-  while [[ $# -ge 2 ]]; do
-    local NAME="${1}" PATTERN="${2}"
-    shift 2
-    # Alert when the expected version string is no longer present
-    grep -qF "${PATTERN}" <<< "${BODY}" || add_update "${NAME}"
-  done
 }
 
 # Check a flat ISO file against transmission status and local disk.
@@ -252,6 +224,71 @@ check_mint() {
     add_update "STALE:${ISO}"
   done
 }
+
+# Fetch and process the CachyOS download page, comparing the current release
+# against local disk and transmission status.
+#
+# cachyos.org/download/ embeds torrent metadata in HTML-entity-encoded JSON
+# props on astro-island components, one per edition. The torrent_url field
+# contains the full URL to the .torrent file, from which the base ISO name is
+# extracted and .iso appended since CachyOS torrent filenames do not include
+# the .iso extension.
+#
+# CachyOS is a rolling release like Arch; all editions share a single release
+# date (e.g. 260426) and older ISOs serve no functional purpose. Only the
+# current release is valid; any local cachyos-*.iso not matching the current
+# release date is flagged as stale.
+#
+# Alerts:
+#   NEW:CachyOS-YYMMDD          - current release not present on local disk
+#   ORPHAN:cachyos-EDITION.iso  - current ISO on disk but unknown to transmission
+#   STALE:cachyos-OLD.iso       - local ISO superseded by the current release
+#   MALFORMED:cachyos.org       - page returned no torrent URLs
+check_cachy() {
+  fetch "https://cachyos.org/download/" "CachyOS" "notused" || return 1
+  body_ok "${DOMAIN}" || return 1
+
+  # Extract all current ISO names from the HTML-entity-encoded torrent_url fields.
+  # CachyOS torrent filenames omit the .iso extension so we append it after extraction.
+  local CACHY_TRACKER
+  CACHY_TRACKER=$(grep -oP 'torrent_url&quot;:\[0,&quot;[^&]+/\Kcachyos-[^&]+(?=\.torrent&quot;)' \
+    <<< "${BODY}" | sed 's/$/.iso/' | sort)
+
+  # I'm sure this will break on us one day
+  if [[ -z "${CACHY_TRACKER}" ]]; then
+    add_update "MALFORMED:cachyos.org"
+    return 1
+  fi
+
+  # Extract the current release date shared across all editions (e.g. 260426).
+  # All editions on the page are built from the same release so we take the
+  # first match; if editions ever diverge this will need revisiting.
+  local CURRENT_RELEASE
+  CURRENT_RELEASE=$(grep -oP 'cachyos-[^-]+-linux-\K\d+(?=\.iso)' <<< "${CACHY_TRACKER}" \
+    | sort -u | tail -1)
+
+  # Check each current edition ISO against transmission status and local disk,
+  # using a version-level alert name to match the Arch single-release model
+  while IFS= read -r ISO; do
+    check_iso "${ISO}" "NEW:CachyOS-${CURRENT_RELEASE}"
+  done <<< "${CACHY_TRACKER}"
+
+  # Alert on any local cachyos-*.iso files that are no longer the current release.
+  # Runs unconditionally so stale ISOs are caught even when the current ones
+  # are already known to transmission.
+  for FILE in "${ISO_DIR}"/cachyos-*.iso; do
+    [[ -s "${FILE}" ]] || continue
+    local ISO
+    ISO=$(basename "${FILE}")
+
+    # Still in the current release listing; nothing to do
+    grep -qF "${ISO}" <<< "${CACHY_TRACKER}" && continue
+
+    # Local ISO is superseded by the current release
+    add_update "STALE:${ISO}"
+  done
+}
+
 
 # Fetch and process the Arch Linux download page, comparing the current release
 # against torrent(s) on our local disk.
@@ -797,10 +834,8 @@ fi
 # Enable bash trace output for interactive debugging
 [[ "${1}" == "--debug" ]] && set -x
 
-# Simple page-scrape checks: fetch each URL once and look for the version string
-check_distro "https://cachyos.org/download/"   "CachyOS"    "${CACHY}"
-
-# More bespoke, involved checks to monitor multiple versions at once
+# Dynamic checks for all monitored distributions
+check_cachy
 check_mint
 check_arch
 check_fedora
