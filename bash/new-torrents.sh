@@ -44,14 +44,11 @@ add_update() {
 # Tracks consecutive failures per name and alerts once FAIL_THRESHOLD is reached.
 # Resets failure counters on success.
 #
-# Usage: fetch URL NAME1 PATTERN1 [NAME2 PATTERN2 ...]
-#   URL          - the URL to fetch
-#   NAME/PATTERN - pairs used to track per-distro failure counts; PATTERN is
-#                  unused by fetch itself but keeps the call signature consistent
-#                  with check_distro so callers can pass "$@" through unchanged.
+# Usage: fetch URL NAME
+#   URL  - the URL to fetch
+#   NAME - name used to track failure counts in FAIL_FILE
 fetch() {
-  local URL="${1}"
-  shift
+  local URL="${1}" NAME="${2}"
   local COUNT
 
   # Extract the domain for use in down-alerts
@@ -60,37 +57,27 @@ fetch() {
   # Fetch the URL; result is available globally as BODY
   BODY=$(curl --silent --max-time 10 --compressed --fail-with-body "${URL}")
 
-  # On failure, either create a counter or increment an existing counter
+  # On failure, increment the failure counter and alert once FAIL_THRESHOLD is reached
   if [[ $? -ne 0 ]]; then
     BODY=""
     touch "${FAIL_FILE}"
-    # Increment and check the failure counter for each name in the pair list
-    while [[ $# -ge 2 ]]; do
-      local NAME="${1}"
-      shift 2
-      COUNT=$(grep -F "${NAME}=" "${FAIL_FILE}" | cut -d= -f2)
-      COUNT=$(( ${COUNT:-0} + 1 ))
-      if grep -qF "${NAME}=" "${FAIL_FILE}"; then
-        grep -vF "${NAME}=" "${FAIL_FILE}" > "${FAIL_FILE}.tmp"
-        mv "${FAIL_FILE}.tmp" "${FAIL_FILE}"
-      fi
-      echo "${NAME}=${COUNT}" >> "${FAIL_FILE}"
-      [[ "${COUNT}" -ge "${FAIL_THRESHOLD}" ]] && add_update "${DOMAIN}"
-    done
-    return 1
-  fi
-
-  # On success, check for and clear any counters that need to be cleared
-  # if we have any stored for this check. Skip completely if the file is empty.
-  [[ ! -s "${FAIL_FILE}" ]] && return 0
-  while [[ $# -ge 2 ]]; do
-    local NAME="${1}"
-    shift 2
+    COUNT=$(grep -F "${NAME}=" "${FAIL_FILE}" | cut -d= -f2)
+    COUNT=$(( ${COUNT:-0} + 1 ))
     if grep -qF "${NAME}=" "${FAIL_FILE}"; then
       grep -vF "${NAME}=" "${FAIL_FILE}" > "${FAIL_FILE}.tmp"
       mv "${FAIL_FILE}.tmp" "${FAIL_FILE}"
     fi
-  done
+    echo "${NAME}=${COUNT}" >> "${FAIL_FILE}"
+    [[ "${COUNT}" -ge "${FAIL_THRESHOLD}" ]] && add_update "${DOMAIN}"
+    return 1
+  fi
+
+  # On success, clear the failure counter if one exists for this name
+  [[ ! -s "${FAIL_FILE}" ]] && return 0
+  if grep -qF "${NAME}=" "${FAIL_FILE}"; then
+    grep -vF "${NAME}=" "${FAIL_FILE}" > "${FAIL_FILE}.tmp"
+    mv "${FAIL_FILE}.tmp" "${FAIL_FILE}"
+  fi
 }
 
 # Validate that BODY is non-empty and meets a minimum length threshold.
@@ -171,8 +158,9 @@ check_dir() {
 #   MISSING:linuxmint-*.iso  - no Linux Mint ISOs found on our disk at all
 #   MALFORMED:Linux-Mint     - stable index returned no version directories
 #   MALFORMED:Linux-Mint-VER - version directory returned no ISOs
+
 check_mint() {
-  fetch "https://pub.linuxmint.io/stable/" "Linux Mint" "notused" || return 1
+  fetch "https://pub.linuxmint.io/stable/" "Linux-Mint" || return 1
   body_ok "${DOMAIN}" || return 1
 
   # Extract the latest version directory from the stable index
@@ -186,7 +174,7 @@ check_mint() {
   fi
 
   # Fetch the version directory to get the current ISO listing
-  fetch "https://pub.linuxmint.io/stable/${CURRENT_VERSION}/" "Linux Mint" "notused" || return 1
+  fetch "https://pub.linuxmint.io/stable/${CURRENT_VERSION}/" "Linux-Mint-VER" || return 1
   body_ok "${DOMAIN}" || return 1
 
   local MINT_TRACKER
@@ -245,7 +233,7 @@ check_mint() {
 #   STALE:cachyos-OLD.iso       - local ISO superseded by the current release
 #   MALFORMED:cachyos.org       - page returned no torrent URLs
 check_cachy() {
-  fetch "https://cachyos.org/download/" "CachyOS" "notused" || return 1
+  fetch "https://cachyos.org/download/" "CachyOS" || return 1
   body_ok "${DOMAIN}" || return 1
 
   # Extract all current ISO names from the HTML-entity-encoded torrent_url fields.
@@ -289,7 +277,6 @@ check_cachy() {
   done
 }
 
-
 # Fetch and process the Arch Linux download page, comparing the current release
 # against torrent(s) on our local disk.
 #
@@ -307,7 +294,7 @@ check_cachy() {
 #   ORPHAN:archlinux-YYYY-x86_64.iso - current ISO on disk but unknown to transmission
 #   STALE:archlinux-OLD-x86_64.iso   - local ISO superseded by a newer release
 check_arch() {
-  fetch "https://archlinux.org/download/" "Arch" "notused" || return 1
+  fetch "https://archlinux.org/download/" "Arch" || return 1
   body_ok "${DOMAIN}" || return 1
 
   # Extract the current release date from the structured field on the download page
@@ -331,6 +318,7 @@ check_arch() {
   # Runs unconditionally so stale ISOs are caught even when the current one
   # is already known to transmission.
   for FILE in "${ISO_DIR}"/archlinux-*.iso; do
+    [[ -s "${FILE}" ]] || continue
     local ISO
     ISO=$(basename "${FILE}")
 
@@ -367,6 +355,7 @@ check_fedora_version() {
 
   # Check for local directories for this version no longer listed on the tracker.
   # The glob is scoped to -${VER}/ to avoid matching other versions.
+  local LOCAL_FEDORA
   LOCAL_FEDORA=("${ISO_DIR}"/Fedora-*-"${VER}"/)
   [[ -d "${LOCAL_FEDORA[0]}" ]] || return 0
 
@@ -390,7 +379,6 @@ check_fedora_version() {
 # subdirectory named after the torrent file minus the .torrent suffix, so
 # directory presence is used instead of ISO filename matching.
 #
-# Version tracking is fully dynamic - no FEDORA_VERSIONS variable is needed.
 # The active version set is derived from the union of what the tracker publishes
 # and what exists on local disk, so no script changes are needed when versions
 # are added or removed upstream.
@@ -404,7 +392,7 @@ check_fedora_version() {
 #   ORPHAN:DIR - torrent directory present on disk but unknown to transmission
 #   STALE:DIR  - torrent directory present on disk but removed from the tracker
 check_fedora() {
-  fetch "https://torrent.fedoraproject.org/torrents.json" "Fedora" "notused" || return 1
+  fetch "https://torrent.fedoraproject.org/torrents.json" "Fedora" || return 1
   body_ok "${DOMAIN}" || return 1
 
   # Extract the sorted list of release version names currently on the tracker
@@ -431,6 +419,7 @@ check_fedora() {
   done
 
   while IFS= read -r VER; do
+    local LOCAL_VER_DIRS
     LOCAL_VER_DIRS=("${ISO_DIR}"/Fedora-*-"${VER}"/)
 
     # Version is on the tracker but no local directories exist yet; alert at
@@ -463,10 +452,10 @@ check_fedora() {
 # isos.html and in local directories.
 #
 # A new point release under a tracked major (e.g. 10.2 replacing 10.1) raises a
-# single NEW:AlmaLinux-10.2 alert rather than one per arch. Per-arch NEW:/ORPHAN:
-# checks fire once at least one local directory exists for the current point
-# release. STALE: fires for any local directory whose point release is no longer
-# the current one listed on isos.html.
+# single NEW:AlmaLinux-10.2 alert rather than one per arch. Per-arch NEW: and
+# ORPHAN: checks fire once at least one local directory exists for the current
+# point release. STALE: fires for any local directory whose point release is no
+# longer the current one listed on isos.html.
 #
 # Usage: check_alma_version MAJOR CURRENT_VERSION ARCHES
 #   MAJOR           - the AlmaLinux major version number (e.g. 10)
@@ -483,6 +472,7 @@ check_alma_version() {
 
   # Check whether the current point release is present locally. If any arch
   # directory exists for the current version, the release is considered known.
+  local LOCAL_CURRENT
   LOCAL_CURRENT=("${ISO_DIR}"/AlmaLinux-"${CURRENT_VERSION}"-*/)
 
   # Current point release has no local directories yet; alert at the version
@@ -501,6 +491,7 @@ check_alma_version() {
 
   # Alert on local directories for this major version whose point release
   # is no longer current on isos.html (i.e. superseded by a newer point release).
+  local LOCAL_ALMA
   LOCAL_ALMA=("${ISO_DIR}"/AlmaLinux-"${MAJOR}".*-*/)
   for DIR in "${LOCAL_ALMA[@]}"; do
     [[ -d "${DIR}" ]] || continue
@@ -518,8 +509,7 @@ check_alma_version() {
 }
 
 # Fetch and process the AlmaLinux isos.html page, comparing it against local
-# disk and transmission status. No need to track specific versions since we
-# mirror whatever is currently active and latest.
+# disk and transmission status.
 #
 # isos.html lists the current point release per major version per arch. Sadly,
 # AlmaLinux doesn't have a torrent-specific landing page like Ubuntu or Fedora.
@@ -536,7 +526,7 @@ check_alma_version() {
 #   ORPHAN:AlmaLinux-VER-ARCH - directory present on disk but unknown to transmission
 #   STALE:AlmaLinux-VER-ARCH  - local directory superseded by a newer point release
 check_alma() {
-  fetch "https://mirrors.almalinux.org/isos.html" "AlmaLinux" "notused" || return 1
+  fetch "https://mirrors.almalinux.org/isos.html" "AlmaLinux" || return 1
   body_ok "${DOMAIN}" || return 1
 
   # Extract all unique version+arch pairs from isos.html links of the form
@@ -571,6 +561,7 @@ check_alma() {
   done
 
   while IFS= read -r MAJOR; do
+    local LOCAL_MAJOR_DIRS
     LOCAL_MAJOR_DIRS=("${ISO_DIR}"/AlmaLinux-"${MAJOR}".*-*/)
 
     # Major is on isos.html but has no local directories yet; alert at the
@@ -617,7 +608,7 @@ check_alma() {
 #   STALE:ISO            - local ubuntu-*.iso no longer listed on the tracker
 #   MISSING:ubuntu-*.iso - no Ubuntu ISOs found on our disk at all
 check_ubuntu() {
-  fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" "notused" || return 1
+  fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" || return 1
   body_ok "${DOMAIN}" || return 1
 
   local UBUNTU_TRACKER
@@ -673,7 +664,7 @@ check_ubuntu() {
 #   STALE:proxmox-ve_X.Y-Z.iso  - local ISO superseded by a newer point release
 #   DROPPED:Proxmox-MAJOR       - local ISOs exist for a major absent from the page
 check_proxmox() {
-  fetch "https://www.proxmox.com/en/downloads/proxmox-virtual-environment" "Proxmox" "notused" || return 1
+  fetch "https://www.proxmox.com/en/downloads/proxmox-virtual-environment" "Proxmox" || return 1
   body_ok "${DOMAIN}" || return 1
 
   # Extract unique ISO version strings (MAJOR.MINOR-PATCH format)
