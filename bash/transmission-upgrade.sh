@@ -32,12 +32,12 @@ if [[ -x /usr/local/bin/transmission-remote ]]; then
         | head -1)
 fi
 
-# Install if not yet present because why not
-if [[ -n "$INSTALLED_VERSION" ]]; then
-    log "Currently installed version: $INSTALLED_VERSION"
-else
-    log "Transmission does not appear to be installed yet."
+# Exit if we can't find the installed version
+if [[ -z "$INSTALLED_VERSION" ]]; then
+    die "Transmission does not appear to be installed yet."
 fi
+
+log "Currently installed version: $INSTALLED_VERSION"
 
 # Exit if latest is already present
 if [[ "$INSTALLED_VERSION" == "$LATEST_VERSION" ]]; then
