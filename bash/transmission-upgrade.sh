@@ -15,16 +15,34 @@ die()  { echo "[ERROR] $*" >&2; exit 1; }
 # Must be run as root
 [[ $EUID -eq 0 ]] || die "This script must be run as root."
 
+# Must be run on Alma or Fedora
+command -v dnf &>/dev/null || die "This script requires dnf"
+
+# Check build dependencies
+MISSING=()
+for pkg in cmake gcc gcc-c++ make pkgconf-pkg-config curl jq; do
+    rpm -q "$pkg" &>/dev/null || MISSING+=("$pkg")
+done
+if [[ ${#MISSING[@]} -gt 0 ]]; then
+    die "Missing required packages: ${MISSING[*]}
+       Install with: dnf install -y ${MISSING[*]}"
+fi
+
 # Check upstream for a new release
 log "Checking GitHub for latest Transmission release..."
-LATEST_VERSION=$(curl -fsSL "$GITHUB_API" \
-    | grep '"tag_name"' \
-    | sed -E 's/.*"tag_name": *"([^"]+)".*/\1/')
+API_RESPONSE=$(curl -fsSL "$GITHUB_API") || die "GitHub API request failed."
 
+LATEST_VERSION=$(echo "$API_RESPONSE" | jq -r '.tag_name')
 [[ -n "$LATEST_VERSION" ]] || die "Could not determine latest version from GitHub API."
 log "Latest available version: $LATEST_VERSION"
 
-# Check installed version 
+# Check the checksums baby
+TARBALL_DIGEST=$(echo "$API_RESPONSE" \
+    | jq -r --arg name "transmission-${LATEST_VERSION}.tar.xz" \
+        '.assets[] | select(.name == $name) | .digest | ltrimstr("sha256:")')
+[[ -n "$TARBALL_DIGEST" ]] || die "Could not extract tarball digest from GitHub API."
+
+# Check installed version
 INSTALLED_VERSION=""
 if [[ -x /usr/local/bin/transmission-remote ]]; then
     INSTALLED_VERSION=$(/usr/local/bin/transmission-remote --version 2>&1 \
@@ -33,10 +51,7 @@ if [[ -x /usr/local/bin/transmission-remote ]]; then
 fi
 
 # Exit if we can't find the installed version
-if [[ -z "$INSTALLED_VERSION" ]]; then
-    die "Transmission does not appear to be installed yet."
-fi
-
+[[ -n "$INSTALLED_VERSION" ]] || die "Transmission does not appear to be installed yet."
 log "Currently installed version: $INSTALLED_VERSION"
 
 # Exit if latest is already present
@@ -50,37 +65,43 @@ log "Upgrade available: $INSTALLED_VERSION -> $LATEST_VERSION"
 # Check if we already have the tarball
 TARBALL="transmission-${LATEST_VERSION}.tar.xz"
 TARBALL_PATH="$SRC_DIR/$TARBALL"
+RELEASE_BASE="https://github.com/transmission/transmission/releases/download/${LATEST_VERSION}"
 
 mkdir -p "$SRC_DIR"
 
 if [[ -f "$TARBALL_PATH" ]]; then
-    log "Tarball already present: $TARBALL_PATH — skipping download."
+    log "Tarball already present: $TARBALL_PATH"
 else
-    DOWNLOAD_URL="https://github.com/transmission/transmission/releases/download/${LATEST_VERSION}/${TARBALL}"
     log "Downloading $TARBALL..."
-    wget -q --show-progress -O "$TARBALL_PATH" "$DOWNLOAD_URL" \
-        || die "Download failed: $DOWNLOAD_URL"
+    curl -fL --progress-bar -o "$TARBALL_PATH" "$RELEASE_BASE/$TARBALL" \
+        || die "Tarball download failed: $RELEASE_BASE/$TARBALL"
 fi
+
+# Verify checksum
+log "Verifying checksum..."
+ACTUAL_DIGEST=$(sha256sum "$TARBALL_PATH" | awk '{print $1}')
+if [[ "$ACTUAL_DIGEST" != "$TARBALL_DIGEST" ]]; then
+    rm -f "$TARBALL_PATH"
+    die "Checksum mismatch — tarball deleted. Re-run to download fresh.
+       Expected: $TARBALL_DIGEST
+       Got:      $ACTUAL_DIGEST"
+fi
+log "Checksum OK."
 
 # Extract it, fresh if needed
 BUILD_DIR="$SRC_DIR/transmission-${LATEST_VERSION}"
-
 if [[ -d "$BUILD_DIR" ]]; then
     log "Source directory already exists; removing stale build: $BUILD_DIR"
     rm -rf "$BUILD_DIR"
 fi
-
 log "Extracting $TARBALL..."
 tar xf "$TARBALL_PATH" -C "$SRC_DIR"
-
 [[ -d "$BUILD_DIR" ]] || die "Expected source dir not found after extraction: $BUILD_DIR"
 
 # Build it
 cd "$BUILD_DIR"
-
 log "Configuring build..."
 cmake -B build -DCMAKE_BUILD_TYPE=Release || die "Build stage 1 failed"
-
 log "Compiling (using $(nproc) cores)..."
 cmake --build build -- -j"$(nproc)" || die "Build stage 2 failed"
 
@@ -110,9 +131,10 @@ if [[ "$RESTART_SERVICE" == true ]]; then
 fi
 
 # Did we do good work?
-INSTALLED_NOW=$(transmission-daemon --version 2>&1 \
+INSTALLED_NOW=$(/usr/local/bin/transmission-remote --version 2>&1 \
     | grep -oE '[0-9]+\.[0-9]+(\.[0-9]+)?' \
     | head -1)
+[[ -n "" ]] || die "Failed to capture installed version after install"
 
 # All done
 log "Upgrade complete. Installed version: $INSTALLED_NOW"
