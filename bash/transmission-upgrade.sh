@@ -1,7 +1,8 @@
 #!/bin/bash
-# Checks GitHub for the latest Transmission release and builds/installs it
-# from source if newer than the currently installed version.
-# Must be run as root.
+# Build and upgrade Transmission from source on alma10 
+# until BZ#2401885 / BZ#2401887 are resolved.
+#
+# Must be run as root
 
 # Configuration
 SRC_DIR="/usr/src/transmission"
@@ -15,10 +16,10 @@ die()  { echo "[ERROR] $*" >&2; exit 1; }
 # Must be run as root
 [[ $EUID -eq 0 ]] || die "This script must be run as root."
 
-# Must be run on Alma or Fedora
+# Must be run on a system with dnf (only tested on Alma10)
 command -v dnf &>/dev/null || die "This script requires dnf"
 
-# Check build dependencies
+# Check build / runtime dependencies
 MISSING=()
 for pkg in cmake gcc gcc-c++ make pkgconf-pkg-config curl jq; do
     rpm -q "$pkg" &>/dev/null || MISSING+=("$pkg")
@@ -28,15 +29,16 @@ if [[ ${#MISSING[@]} -gt 0 ]]; then
        Install with: dnf install -y ${MISSING[*]}"
 fi
 
-# Check upstream for a new release
+# Cache the API response for both version and checksum data
 log "Checking GitHub for latest Transmission release..."
 API_RESPONSE=$(curl -fsSL "$GITHUB_API") || die "GitHub API request failed."
 
+# Check upstream for a new release
 LATEST_VERSION=$(echo "$API_RESPONSE" | jq -r '.tag_name')
 [[ -n "$LATEST_VERSION" ]] || die "Could not determine latest version from GitHub API."
 log "Latest available version: $LATEST_VERSION"
 
-# Check the checksums baby
+# Grab the checksum
 TARBALL_DIGEST=$(echo "$API_RESPONSE" \
     | jq -r --arg name "transmission-${LATEST_VERSION}.tar.xz" \
         '.assets[] | select(.name == $name) | .digest | ltrimstr("sha256:")')
@@ -54,12 +56,13 @@ fi
 [[ -n "$INSTALLED_VERSION" ]] || die "Transmission does not appear to be installed yet."
 log "Currently installed version: $INSTALLED_VERSION"
 
-# Exit if latest is already present
+# If upstream matches our current version, nothing to do
 if [[ "$INSTALLED_VERSION" == "$LATEST_VERSION" ]]; then
     log "Already up to date ($INSTALLED_VERSION). Nothing to do."
     exit 0
 fi
 
+# We've got one!
 log "Upgrade available: $INSTALLED_VERSION -> $LATEST_VERSION"
 
 # Check if we already have the tarball
@@ -77,7 +80,7 @@ else
         || die "Tarball download failed: $RELEASE_BASE/$TARBALL"
 fi
 
-# Verify checksum
+# Check the checksum baby
 log "Verifying checksum..."
 ACTUAL_DIGEST=$(sha256sum "$TARBALL_PATH" | awk '{print $1}')
 if [[ "$ACTUAL_DIGEST" != "$TARBALL_DIGEST" ]]; then
@@ -105,7 +108,7 @@ cmake -B build -DCMAKE_BUILD_TYPE=Release || die "Build stage 1 failed"
 log "Compiling (using $(nproc) cores)..."
 cmake --build build -- -j"$(nproc)" || die "Build stage 2 failed"
 
-# Shut it down
+# Shut it down, if running
 if systemctl is-active --quiet "$SERVICE" 2>/dev/null; then
     log "Stopping $SERVICE..."
     systemctl stop "$SERVICE"
@@ -118,7 +121,7 @@ fi
 log "Installing..."
 cmake --install build || die "Install stage failed"
 
-# Start it
+# Start it if we stopped it
 if [[ "$RESTART_SERVICE" == true ]]; then
     log "Restarting $SERVICE..."
     systemctl start "$SERVICE"
