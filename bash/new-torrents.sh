@@ -605,8 +605,8 @@ check_alma() {
 # Per-ISO alerts:
 #   NEW:ISO              - tracker ISO absent from disk and unknown to transmission
 #   ORPHAN:ISO           - tracker ISO present on disk but unknown to transmission
-#   STALE:ISO            - local ubuntu-*.iso no longer listed on the tracker
-#   MISSING:ubuntu-*.iso - no Ubuntu ISOs found on our disk at all
+#   STALE:ISO            - local *buntu*.iso no longer listed on the tracker
+#   MISSING:*buntu*.iso  - no Ubuntu ISOs found on our disk at all
 check_ubuntu() {
   fetch "https://torrent.ubuntu.com/tracker_index" "Ubuntu" || return 1
   body_ok "${DOMAIN}" || return 1
@@ -625,13 +625,13 @@ check_ubuntu() {
     check_iso "${ISO}"
   done <<< "${UBUNTU_TRACKER}"
 
-  # Alert on local ubuntu-*.iso files no longer listed on the tracker
+  # Alert on local *buntu*.iso files no longer listed on the tracker
   local LOCAL_ISOS
-  LOCAL_ISOS=("${ISO_DIR}"/ubuntu-*.iso)
+  LOCAL_ISOS=("${ISO_DIR}"/*buntu*.iso)
 
   # The glob matched nothing; no Ubuntu ISOs on disk at all
   if [[ ! -s "${LOCAL_ISOS[0]}" ]]; then
-    add_update "MISSING:ubuntu-*.iso"
+    add_update "MISSING:*buntu*.iso"
     return 0
   fi
 
