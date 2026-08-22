@@ -4,7 +4,9 @@
 Helps with patching the hypervisor when the automatic reboot handling acts
 a bit funny. Sends ACPI shutdown to all running VMs, then displays a live
 per-VM status table (state + elapsed time) until everything is off or the
-timeout is reached.
+timeout is reached. Only VMs that were running when the script started are
+tracked; unrelated VMs started on the host during the wait do not keep it
+waiting.
 """
 
 from __future__ import annotations
@@ -24,6 +26,14 @@ CHECK_INTERVAL_SECONDS = 1.0
 # feel real-time instead of jumping only when a VM's state changes.
 DISPLAY_REFRESH_SECONDS = 1.0
 
+# How long to wait for a single `virsh` invocation before giving up, so a
+# wedged libvirt daemon cannot hang this script forever.
+VIRSH_TIMEOUT_SECONDS = 10.0
+
+# The widest status line: 2 (indent) + 30 (name) + 1 + 20 (state)
+# + 1 + 6 (elapsed) + 9 ("s elapsed") = 69, rounded up to 70.
+DISPLAY_WIDTH = 70
+
 # ANSI color codes for the live status display
 COLOR_RESET = "\033[0m"
 COLOR_YELLOW = "\033[33m"  # in progress / waiting
@@ -32,8 +42,16 @@ COLOR_RED = "\033[31m"  # timed out / failure
 COLOR_GRAY = "\033[90m"  # idle / not yet started
 
 
+def tty_enabled() -> bool:
+    """True when stdout is an interactive terminal (colors/cursor moves OK)."""
+    return sys.stdout.isatty()
+
+
 def colorize(text: str, color: str) -> str:
-    """Wrap text in an ANSI color code, resetting after."""
+    """Wrap text in an ANSI color code, resetting after. Returns plain text
+    when stdout is not a TTY so piped/log output stays clean."""
+    if not tty_enabled():
+        return text
     return f"{color}{text}{COLOR_RESET}"
 
 
@@ -44,6 +62,14 @@ class VMState(Enum):
     SHUTDOWN_SENT = "shutdown signal sent"
     OFF = "off"
     TIMED_OUT = "timed out"
+
+
+class SignalResult(Enum):
+    """Outcome of an ACPI shutdown request for a single VM."""
+
+    SENT = "sent"
+    ALREADY_OFF = "already off"
+    FAILED = "failed"
 
 
 @dataclass
@@ -75,7 +101,10 @@ class VM:
         """Single-line status for the live display."""
         elapsed = self.elapsed(now)
         state_text = colorize(f"{self.state.value:<20}", self.state_color())
-        return f"  {self.name:<30} {state_text} {elapsed:6.1f}s elapsed"
+        name = self.name
+        if len(name) > 30:
+            name = name[:29] + "…"  # keep the status columns aligned
+        return f"  {name:<30} {state_text} {elapsed:6.1f}s elapsed"
 
 
 def get_running_vms() -> list[str]:
@@ -85,18 +114,76 @@ def get_running_vms() -> list[str]:
         capture_output=True,
         text=True,
         check=True,
+        timeout=VIRSH_TIMEOUT_SECONDS,
     )
     return [line for line in result.stdout.splitlines() if line.strip()]
 
 
-def send_shutdown(vm_name: str) -> None:
-    """Send the ACPI shutdown signal to a single VM."""
-    subprocess.run(["virsh", "shutdown", vm_name], check=False)
+def get_running_vms_or_error() -> list[str] | None:
+    """Return the running VM names, or None after printing an error.
+
+    Wraps get_running_vms() so a missing `virsh` binary, a timed-out
+    libvirt daemon, or a failing query all report cleanly instead of
+    raising an unhandled exception.
+    """
+    try:
+        return get_running_vms()
+    except FileNotFoundError:
+        print("ERROR: 'virsh' was not found on this system.", file=sys.stderr)
+    except subprocess.TimeoutExpired:
+        print(
+            f"ERROR: 'virsh list' timed out after {VIRSH_TIMEOUT_SECONDS:g}s "
+            "(is the libvirt daemon hung?)",
+            file=sys.stderr,
+        )
+    except subprocess.CalledProcessError as exc:
+        detail = (exc.stderr or "").strip() or str(exc)
+        print(f"ERROR: Failed to query running VMs: {detail}", file=sys.stderr)
+    return None
 
 
-def force_destroy(vm_name: str) -> None:
-    """Force a hard power-off for a VM that failed to shut down gracefully."""
-    subprocess.run(["virsh", "destroy", vm_name], check=False)
+def send_shutdown(vm_name: str) -> SignalResult:
+    """Send the ACPI shutdown signal to a single VM and report the outcome.
+
+    Diagnostics are printed directly; the return value tells the caller how
+    to track this VM.
+    """
+    try:
+        result = subprocess.run(
+            ["virsh", "shutdown", vm_name],
+            capture_output=True,
+            text=True,
+            timeout=VIRSH_TIMEOUT_SECONDS,
+        )
+    except FileNotFoundError:
+        print(
+            f"WARNING: 'virsh' was not found; cannot shut down {vm_name}.",
+            file=sys.stderr,
+        )
+        return SignalResult.FAILED
+    except subprocess.TimeoutExpired:
+        print(
+            f"WARNING: 'virsh shutdown {vm_name}' timed out after "
+            f"{VIRSH_TIMEOUT_SECONDS:g}s.",
+            file=sys.stderr,
+        )
+        return SignalResult.FAILED
+
+    if result.returncode == 0:
+        return SignalResult.SENT
+
+    stderr = (result.stderr or "").strip()
+    if "not running" in stderr.lower():
+        # The guest powered off between the initial list and now.
+        print(f"NOTE: {vm_name} is already off; no shutdown signal needed.")
+        return SignalResult.ALREADY_OFF
+
+    print(
+        f"WARNING: 'virsh shutdown {vm_name}' failed: "
+        f"{stderr or f'exit status {result.returncode}'}",
+        file=sys.stderr,
+    )
+    return SignalResult.FAILED
 
 
 def render_status(vms: list[VM], now: float, elapsed_total: float) -> str:
@@ -133,18 +220,42 @@ def pad_visible(text: str, width: int) -> str:
 
 
 def move_cursor_up(num_lines: int) -> None:
-    """Move the terminal cursor up to redraw the status block in place."""
-    if num_lines > 0:
+    """Move the terminal cursor up to redraw the status block in place.
+    No-op when stdout is not a TTY (piped output)."""
+    if num_lines > 0 and tty_enabled():
         sys.stdout.write(f"\033[{num_lines}A")
+
+
+def paint_status(
+    vms: list[VM], now: float, elapsed_total: float, rendered_lines: int
+) -> int:
+    """Draw the status block (redrawing in place when the display already
+    shows one). Returns the number of lines drawn."""
+    if rendered_lines:
+        move_cursor_up(rendered_lines)
+    block = render_status(vms, now, elapsed_total)
+    # Pad each line (by visible width, ignoring ANSI codes) so leftover
+    # characters from a previous, longer render don't linger on screen.
+    sys.stdout.write(
+        "\n".join(pad_visible(line, DISPLAY_WIDTH) for line in block.split("\n")) + "\n"
+    )
+    sys.stdout.flush()
+    return block.count("\n") + 1
+
+
+def update_states(vms: list[VM], running: set[str], now: float) -> None:
+    """Mark tracked VMs as OFF once they no longer appear in `running`."""
+    for vm in vms:
+        if vm.state == VMState.SHUTDOWN_SENT and vm.name not in running:
+            vm.state = VMState.OFF
+            vm.stopped_at = now
 
 
 def main() -> int:
     print("Checking for running Virtual Machines...")
 
-    try:
-        running_names = get_running_vms()
-    except subprocess.CalledProcessError as exc:
-        print(f"ERROR: Failed to query running VMs: {exc}", file=sys.stderr)
+    running_names = get_running_vms_or_error()
+    if running_names is None:
         return 1
 
     if not running_names:
@@ -159,59 +270,80 @@ def main() -> int:
     print("----------------------------------------------------")
 
     shutdown_time = time.monotonic()
+    failed: list[str] = []
     for vm in vms:
         print(f"Sending shutdown signal to: {vm.name}")
-        send_shutdown(vm.name)
-        vm.state = VMState.SHUTDOWN_SENT
-        vm.shutdown_sent_at = shutdown_time
+        outcome = send_shutdown(vm.name)
+        if outcome is SignalResult.SENT:
+            vm.state = VMState.SHUTDOWN_SENT
+            vm.shutdown_sent_at = shutdown_time
+        elif outcome is SignalResult.ALREADY_OFF:
+            # It powered off between the initial list and now.
+            vm.state = VMState.OFF
+            vm.stopped_at = shutdown_time
+        else:
+            failed.append(vm.name)
+
+    if failed:
+        # These VMs were never asked to shut down, so waiting them out would
+        # only produce a misleading "timed out" result; the VMs that did get
+        # the signal keep shutting down in the background.
+        print("----------------------------------------------------")
+        print("ERROR: The following VMs could not be shut down gracefully:")
+        for name in failed:
+            print(f"  {name}")
+        print("Check them with 'virsh list' / 'virsh console <vm_name>'.")
+        return 1
     print("----------------------------------------------------")
 
     # Render the initial status block, then redraw it in place on every
     # display tick. `virsh` is only re-polled every CHECK_INTERVAL_SECONDS;
     # the display itself refreshes faster (DISPLAY_REFRESH_SECONDS) so the
     # elapsed-time counters visibly tick up in real time between polls.
+    #
+    # Only the VMs we are tracking decide when the wait ends: unrelated VMs
+    # that start on the host during the wait are not this script's concern.
     rendered_lines = 0
-    elapsed = 0.0
-    elapsed_since_poll = 0.0
-    still_running: set[str] = {vm.name for vm in vms}
+    last_poll = shutdown_time
 
-    while True:
-        now = time.monotonic()
+    try:
+        while True:
+            now = time.monotonic()
+            elapsed_total = now - shutdown_time
 
-        if elapsed_since_poll >= CHECK_INTERVAL_SECONDS:
-            try:
-                still_running = set(get_running_vms())
-            except subprocess.CalledProcessError as exc:
-                print(f"\nERROR: Failed to query running VMs: {exc}", file=sys.stderr)
-                return 1
-            elapsed_since_poll = 0.0
+            if now - last_poll >= CHECK_INTERVAL_SECONDS:
+                running = get_running_vms_or_error()
+                if running is None:
+                    return 1
+                last_poll = now
+                update_states(vms, set(running), now)
 
-            for vm in vms:
-                if vm.name not in still_running and vm.state == VMState.SHUTDOWN_SENT:
-                    vm.state = VMState.OFF
-                    vm.stopped_at = now
+            rendered_lines = paint_status(vms, now, elapsed_total, rendered_lines)
 
-        if rendered_lines:
-            move_cursor_up(rendered_lines)
+            if all(vm.state == VMState.OFF for vm in vms):
+                break
 
-        block = render_status(vms, now, elapsed)
-        # Pad each line (by visible width, ignoring ANSI codes) so leftover
-        # characters from a previous, longer render don't linger on screen.
-        sys.stdout.write("\n".join(pad_visible(line, 70) for line in block.split("\n")) + "\n")
-        sys.stdout.flush()
-        rendered_lines = block.count("\n") + 1
+            if elapsed_total >= TIMEOUT_SECONDS:
+                # One final confirmation poll so a VM that stopped in the gap
+                # between the last poll and the deadline is not reported as
+                # having failed.
+                running = get_running_vms_or_error()
+                if running is None:
+                    return 1
+                update_states(vms, set(running), now)
+                for vm in vms:
+                    if vm.state == VMState.SHUTDOWN_SENT:
+                        vm.state = VMState.TIMED_OUT
+                # Re-render so the final "timed out" state is actually shown.
+                paint_status(vms, now, elapsed_total, rendered_lines)
+                break
 
-        if not still_running:
-            break
-        if elapsed >= TIMEOUT_SECONDS:
-            for vm in vms:
-                if vm.state == VMState.SHUTDOWN_SENT:
-                    vm.state = VMState.TIMED_OUT
-            break
-
-        time.sleep(DISPLAY_REFRESH_SECONDS)
-        elapsed += DISPLAY_REFRESH_SECONDS
-        elapsed_since_poll += DISPLAY_REFRESH_SECONDS
+            time.sleep(DISPLAY_REFRESH_SECONDS)
+    except KeyboardInterrupt:
+        print()
+        print("Interrupted. VMs still shutting down continue in the background;")
+        print("check their state with 'virsh list'.")
+        return 130
 
     print()
 
