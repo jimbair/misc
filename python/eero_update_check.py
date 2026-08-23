@@ -48,19 +48,27 @@ def read_stored_version():
         return None
 
     stored = {}
-    with open(CONFIG_PATH, "r") as f:
-        for line in f:
-            if "=" in line:
-                key, val = line.strip().split("=", 1)
-                stored[key] = val.strip('"').strip("'")
+    try:
+        with open(CONFIG_PATH, "r") as f:
+            for line in f:
+                if "=" in line:
+                    key, val = line.strip().split("=", 1)
+                    stored[key] = val.strip('"').strip("'")
+    except (OSError, UnicodeDecodeError) as e:
+        sys.stderr.write(f"Error reading {CONFIG_PATH}: {e}\n")
+        sys.exit(2)
     return stored.get("EERO_VERSION")
 
 
 def write_config(version, release_date):
-    os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
-    with open(CONFIG_PATH, "w") as f:
-        f.write(f'EERO_VERSION="{version}"\n')
-        f.write(f'EERO_RELEASE_DATE="{release_date}"\n')
+    try:
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+        with open(CONFIG_PATH, "w") as f:
+            f.write(f'EERO_VERSION="{version}"\n')
+            f.write(f'EERO_RELEASE_DATE="{release_date}"\n')
+    except OSError as e:
+        sys.stderr.write(f"Error writing {CONFIG_PATH}: {e}\n")
+        sys.exit(2)
 
 
 def main():
