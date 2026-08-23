@@ -98,7 +98,7 @@ class TestVM(unittest.TestCase):
         # Every state should map to a distinct color so they're visually
         # distinguishable in the live display. This matters semantically:
         # paused/suspended wants `virsh resume`, timed-out wants
-        # `virsh destroy` — they must not look identical.
+        # `virsh destroy` -- they must not look identical.
         self.assertEqual(len(set(colors.values())), len(colors))
 
 
@@ -236,24 +236,31 @@ class TestMain(unittest.TestCase):
 
         states_by_poll is a list of (running, shutoff) name pairs, one per
         inventory poll; the last pair repeats once exhausted (trailing
-        steady-state entries are therefore optional). Both `virsh list
-        --state-running --name` and `virsh list --state-shutoff --name`
-        consume the same poll entry, matching poll_domain_states(). Other
-        argv shapes (e.g. `virsh shutdown NAME`) succeed silently. Accepts
-        **kwargs so the timeout/check/capture options the script passes
-        don't break the stub."""
+        steady-state entries are therefore optional). A `--state-running`
+        query STARTS a poll: it selects the entry and advances the counter,
+        and the `--state-shutoff` query issued right after it serves the
+        SAME entry -- matching poll_domain_states(), which expects both
+        listings to reflect one host snapshot. Other argv shapes (e.g.
+        `virsh shutdown NAME`) succeed silently. Accepts **kwargs so the
+        timeout/check/capture options the script passes don't break the
+        stub."""
 
         def fake_run(cmd, **kwargs):
             result = MagicMock()
             result.returncode = 0
             if cmd[:2] == ["virsh", "list"]:
-                running, shutoff = states_by_poll[
-                    min(self._poll_count, len(states_by_poll) - 1)
-                ]
-                names = {"--state-running": running, "--state-shutoff": shutoff}.get(cmd[2], [])
-                result.stdout = "\n".join(names) + "\n" if names else ""
                 if cmd[2] == "--state-running":
+                    self._current_entry = states_by_poll[
+                        min(self._poll_count, len(states_by_poll) - 1)
+                    ]
                     self._poll_count += 1
+                running, shutoff = getattr(
+                    self, "_current_entry", states_by_poll[0]
+                )
+                names = {"--state-running": running, "--state-shutoff": shutoff}.get(
+                    cmd[2], []
+                )
+                result.stdout = "\n".join(names) + "\n" if names else ""
             return result
 
         return fake_run
@@ -429,6 +436,9 @@ class TestMain(unittest.TestCase):
             result = shutdown_vms.main()
         self.assertEqual(result, 1)
         output = "\n".join(captured)
+        # Must be the restart gate, not the timeout branch, that produced
+        # the exit code -- both return 1.
+        self.assertNotIn("Time-out reached", output)
         self.assertIn("started again", output)
         self.assertIn("web01", output)
 
