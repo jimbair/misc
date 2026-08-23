@@ -2,7 +2,6 @@
 """Unit tests for shutdown_vms.py"""
 
 import importlib.util
-import re
 import subprocess
 import sys
 import unittest
