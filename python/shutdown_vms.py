@@ -8,9 +8,10 @@ timeout is reached. Only VMs that were running when the script started are
 tracked; unrelated VMs started on the host during the wait do not keep it
 waiting.
 
-Before reporting success, the script re-checks the host's running-VM list;
-if any tracked VM has powered back on in the meantime, it reports the VM
-and exits 1 so the hypervisor is not patched under a live guest.
+Before reporting success, the script re-checks the host's full domain
+inventory: if any tracked VM is running again, or cannot be confirmed shut
+off (e.g. it is paused or suspended), it reports the VM and exits 1 so the
+hypervisor is not patched over a live guest.
 
 Transient `virsh list` failures are tolerated (up to
 MAX_CONSECUTIVE_POLL_FAILURES in a row) so one libvirt hiccup does not
@@ -347,6 +348,11 @@ def update_states(
 
 
 def main() -> int:
+    # When piped, stdout would otherwise be block-buffered and interleave
+    # out of order with the (unbuffered) stderr warnings in redirected logs.
+    if not sys.stdout.isatty() and hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(line_buffering=True)
+
     print("Checking for running Virtual Machines...")
 
     signals_sent = 0
@@ -524,6 +530,72 @@ def main() -> int:
 
             time.sleep(DISPLAY_REFRESH_SECONDS)
 
+        print()
+
+        remaining = [vm for vm in vms if vm.state is VMState.TIMED_OUT]
+        if remaining:
+            print(
+                "WARNING: Time-out reached. The following VMs failed to shut down "
+                "gracefully:"
+            )
+            for vm in remaining:
+                print(f"    {vm.name}")
+            print()
+            print(
+                "Action required: Log into the guests to check for hung processes, "
+                "or use 'virsh destroy <vm_name>' to force a hard power-off."
+            )
+            if any(vm.name in suspended_before for vm in remaining):
+                print(
+                    "Note: some of these were paused/suspended rather than off; "
+                    "'virsh resume <vm_name>' lets them process the shutdown signal."
+                )
+            return 1
+
+        # Success is not declared until re-confirmed against the host: a
+        # tracked VM that powered off and then restarted must not green-light
+        # a hypervisor patch -- and neither may one that is alive but not
+        # running (paused, pmsuspended, crashed), which a running-only check
+        # would silently wave through.
+        try:
+            running_now, shutoff_now = poll_domain_states()
+        except Exception as exc:  # noqa: BLE001 - mapped below
+            message, _fatal = describe_virsh_failure(exc)
+            print(
+                f"ERROR: Could not verify final VM states: "
+                f"{message.removeprefix('WARNING: ')}"
+            )
+            print("Refusing to report success without verification.")
+            return 1
+
+        restarted = sorted(vm.name for vm in vms if vm.name in running_now)
+        unconfirmed = sorted(
+            vm.name for vm in vms
+            if vm.name not in running_now and vm.name not in shutoff_now
+        )
+        if restarted or unconfirmed:
+            if restarted:
+                print("ERROR: The following VMs shut down but have started again:")
+                for name in restarted:
+                    print(f"    {name}")
+            if unconfirmed:
+                print(
+                    "ERROR: The following VMs could not be confirmed shut off "
+                    "(they may be paused, suspended, or in an unknown state):"
+                )
+                for name in unconfirmed:
+                    print(f"    {name}")
+                print("Check each with 'virsh domstate <vm_name>'.")
+            print()
+            print(
+                "Action required: Resolve them (shut down, or resume and shut"
+                " down) before patching the hypervisor."
+            )
+            return 1
+
+        print("SUCCESS: All Virtual Machines have safely shut down.")
+        return 0
+
     except KeyboardInterrupt:
         print()
         print("Interrupted.", end="")
@@ -536,57 +608,6 @@ def main() -> int:
             print()
         print("Check their state with 'virsh list'.")
         return 130
-
-    print()
-
-    remaining = [vm for vm in vms if vm.state is VMState.TIMED_OUT]
-    if remaining:
-        print(
-            "WARNING: Time-out reached. The following VMs failed to shut down "
-            "gracefully:"
-        )
-        for vm in remaining:
-            print(f"    {vm.name}")
-        print()
-        print(
-            "Action required: Log into the guests to check for hung processes, "
-            "or use 'virsh destroy <vm_name>' to force a hard power-off."
-        )
-        if any(vm.name in suspended_before for vm in remaining):
-            print(
-                "Note: some of these were paused/suspended rather than off; "
-                "'virsh resume <vm_name>' lets them process the shutdown signal."
-            )
-        return 1
-
-    # Success is not declared until re-confirmed against the host: a
-    # tracked VM that powered off and then restarted (autostart, HA agent,
-    # cron...) must not green-light a hypervisor patch.
-    try:
-        still_running = set(get_running_vms())
-    except Exception as exc:  # noqa: BLE001 - mapped below
-        message, _fatal = describe_virsh_failure(exc)
-        print(
-            f"ERROR: Could not verify final VM states: "
-            f"{message.removeprefix('WARNING: ')}"
-        )
-        print("Refusing to report success without verification.")
-        return 1
-
-    restarted = sorted(vm.name for vm in vms if vm.name in still_running)
-    if restarted:
-        print("ERROR: The following VMs shut down but have started again:")
-        for name in restarted:
-            print(f"    {name}")
-        print()
-        print(
-            "Action required: Shut them down again (or disable whatever is"
-            " restarting them) before patching the hypervisor."
-        )
-        return 1
-
-    print("SUCCESS: All Virtual Machines have safely shut down.")
-    return 0
 
 
 if __name__ == "__main__":

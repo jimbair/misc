@@ -463,6 +463,26 @@ class TestMain(unittest.TestCase):
         # No cursor addressing ever reaches a narrow terminal.
         self.assertNotRegex(output, r"\x1b\[\d+A")
 
+    @patch.object(shutdown_vms.subprocess, "run")
+    def test_paused_vm_at_verification_fails(self, mock_run):
+        # web01 powers off, then ends up alive-but-not-running (e.g.
+        # `virsh start --paused` or on_crash=pause): a running-only final
+        # check would wave it through; the gate must refuse.
+        mock_run.side_effect = self._make_fake_run(
+            [(["web01"], []), ([], ["web01"]), ([], [])]
+        )
+        captured = []
+        with self._runtime(), patch(
+            "builtins.print",
+            side_effect=lambda *a, **k: captured.append(" ".join(str(x) for x in a)),
+        ):
+            result = shutdown_vms.main()
+        self.assertEqual(result, 1)
+        output = "\n".join(captured)
+        self.assertNotIn("Time-out reached", output)
+        self.assertIn("confirmed shut off", output)
+        self.assertIn("web01", output)
+
 
 if __name__ == "__main__":
     unittest.main()
