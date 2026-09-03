@@ -8,7 +8,7 @@ import sys
 import urllib.request
 
 CONFIG_PATH = os.path.expanduser("~/.config/eero.conf")
-URL = "https://eero.com/support/articles/209636523"
+URL = "https://eero.com/support/articles/eero-software-release-notes"
 
 
 def fetch_latest_release():
