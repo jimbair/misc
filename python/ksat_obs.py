@@ -33,7 +33,7 @@ UA = os.environ.get("KSAT_UA", "ksat-obs-cache (you@example.com)")
 URL = "https://api.weather.gov/stations/%s/observations"
 
 # Single source of truth for the obs table: column names and order.
-# DDL and the INSERT placeholder list are generated from this, so a
+# DDL and the INSERT statement are generated from this, so a
 # schema change happens in exactly one place.
 COLUMNS = ["ts", "station", "temp_f", "dewpoint_f", "rh_pct",
            "wind_mph", "gust_mph", "wind_dir_deg", "vis_mi", "pressure_inhg",
@@ -48,10 +48,32 @@ COL_DEFS = {  # column declarations that aren't plain REAL
 SCHEMA = ("CREATE TABLE IF NOT EXISTS obs (\n"
           + ",\n".join(f"  {c} {COL_DEFS.get(c, 'REAL')}" for c in COLUMNS)
           + "\n);")
-# Named-column INSERT so value order can never drift from the table DDL
-# (including an older table that still exists under CREATE TABLE IF NOT EXISTS).
-INSERT_SQL = ("INSERT OR IGNORE INTO obs (" + ", ".join(COLUMNS) + ") VALUES ("
-              + ",".join("?" * len(COLUMNS)) + ")")
+# Named-column INSERT + guarded upsert. If NWS ever re-issues a record at the
+# same timestamp (a COR report, or a "Z" preliminary value later replaced), a
+# re-fetch can pick up the new version: ON CONFLICT(ts) updates the row only
+# when the stored raw_json differs from the new one (re-fetching an unchanged
+# record touches nothing). Numeric fields are COALESCE-protected so a null
+# can never wipe out a value already stored; the raw METAR text is only
+# replaced by a non-empty one; a row is never taken over by another station.
+# Run compare_stale.py before relying on this: whether NWS actually revises
+# records here is unconfirmed.
+INSERT_SQL = ("INSERT INTO obs (" + ", ".join(COLUMNS) + ") VALUES ("
+              + ",".join("?" * len(COLUMNS)) + ") "
+              "ON CONFLICT(ts) DO UPDATE SET"
+              " station=excluded.station,"
+              " temp_f=COALESCE(excluded.temp_f, obs.temp_f),"
+              " dewpoint_f=COALESCE(excluded.dewpoint_f, obs.dewpoint_f),"
+              " rh_pct=COALESCE(excluded.rh_pct, obs.rh_pct),"
+              " wind_mph=COALESCE(excluded.wind_mph, obs.wind_mph),"
+              " gust_mph=COALESCE(excluded.gust_mph, obs.gust_mph),"
+              " wind_dir_deg=COALESCE(excluded.wind_dir_deg, obs.wind_dir_deg),"
+              " vis_mi=COALESCE(excluded.vis_mi, obs.vis_mi),"
+              " pressure_inhg=COALESCE(excluded.pressure_inhg, obs.pressure_inhg),"
+              " precip_1h_in=COALESCE(excluded.precip_1h_in, obs.precip_1h_in),"
+              " conditions=excluded.conditions,"
+              " raw_message=COALESCE(NULLIF(excluded.raw_message, ''), obs.raw_message),"
+              " raw_json=excluded.raw_json"
+              " WHERE excluded.raw_json IS NOT obs.raw_json AND excluded.station = obs.station")
 
 # Columns shown by `show`/`csv` and the (shorter) header printed for them.
 SHOW_COLS = ["ts", "temp_f", "dewpoint_f", "rh_pct", "wind_mph", "gust_mph",
@@ -185,14 +207,15 @@ def row_from_feature(f, station):
 
 
 def store(db, features, station):
-    """Insert observations. INSERT OR IGNORE (ts is the PK) makes re-fetches
-    idempotent, and total_changes counts only rows actually inserted, so the
-    before/after diff is exactly the number of new rows."""
+    """Insert observations. A row whose ts already exists is updated only if
+    its raw_json changed (see INSERT_SQL). Returns (new, updated, seen)."""
     rows = [r for r in (row_from_feature(f, station) for f in features) if r is not None]
-    before = db.total_changes
+    n0 = db.execute("SELECT count(*) FROM obs").fetchone()[0]
+    c0 = db.total_changes
     db.executemany(INSERT_SQL, rows)
     db.commit()
-    return db.total_changes - before, len(rows)
+    new = db.execute("SELECT count(*) FROM obs").fetchone()[0] - n0
+    return new, db.total_changes - c0 - new, len(rows)
 
 
 def fetch(db):
@@ -200,14 +223,14 @@ def fetch(db):
         headers={"User-Agent": UA, "Accept": "application/geo+json"})
     with urllib.request.urlopen(req, timeout=30) as r:
         data = json.load(r)
-    new, seen = store(db, data.get("features") or [], STATION)
+    new, updated, seen = store(db, data.get("features") or [], STATION)
     if seen == 0:
         # A station observed for weeks should never return zero features;
         # treat it as a failure so cron (or you) notices an outage / shape change.
         log(f"{STATION}: fetch returned 0 observations "
             "(API outage or response-shape change?)", sys.stderr)
         sys.exit(1)
-    log(f"{STATION}: {seen} fetched, {new} new")
+    log(f"{STATION}: {seen} fetched, {new} new, {updated} updated")
 
 
 # Minute of the routine hourly METAR (KSAT reports at :51). Specials arrive at
@@ -216,11 +239,13 @@ def fetch(db):
 # the UTC normalization: US offsets are whole hours.)
 ROUTINE_MIN = int(os.environ.get("KSAT_ROUTINE_MIN", "51"))
 
-# Also add the in-progress (partial) hour to rain totals: when a special
-# follows the newest routine report, NWS reports its precip "since the last
-# regular METAR", so it's the not-yet-completed hour's amount and is added
-# as-is. Anchored to the newest routine report regardless of its precip
-# value, so a special inside an hour a routine already covers is never
+# Also add the in-progress (partial) hour to rain totals. NWS specials report
+# precip "since the last regular METAR", so the newest special with a
+# positive value after the newest routine report is the not-yet-completed
+# hour's amount (a lower bound; the label shows its as-of time). A trailing
+# blank special (a missing value) is skipped in favor of the most
+# recent meaningful one. Anchored to the newest routine report regardless of
+# its precip, so a special inside an hour a routine already covers is never
 # added (that would double-count). Per-day rows stay full-hours-only; the
 # overall total picks this up, labeled. Set False to sum complete hours only.
 INCLUDE_PARTIAL_HOUR = True
@@ -277,33 +302,31 @@ def rain(rows, include_partial=INCLUDE_PARTIAL_HOUR):
     """(total_in, wet_hours, (max_in, ts), partial_in, partial_ts) over the range.
 
     Sums the complete routine hours: each :51 report's precip is that hour's
-    rain, so the sum equals the range total (it matches NWS's own totals).
-    When include_partial is set, the in-progress hour is also added: the
-    newest report after the newest routine report — if it's a special, NWS
-    reports it "since the last regular METAR", so it's already the
-    not-yet-completed hour's amount. The anchor is the newest routine row
-    regardless of its precip value, so a special inside an hour a routine
-    already covers is never added. The 'heaviest' (max) is over complete
-    hours only (a partial hour's in/h would understate intensity)."""
+    rain, so the sum equals the range total (cross-checkable against the
+    official precipitationLast6Hours values in raw_json). When include_partial
+    is set, the in-progress hour is also added as a lower bound: everything
+    after the newest routine report is a special, and NWS specials report
+    rain "since the last regular METAR", so the newest special with a
+    positive value is the not-yet-completed hour's amount. (A trailing blank
+    special — a value missing for whatever reason — is skipped in favor of
+    the most recent meaningful one; the label's timestamp shows where the
+    figure stops.) The 'heaviest' (max) is over complete hours only (a
+    partial hour's in/h would understate intensity)."""
     vals = [(r[-1], r[0]) for r in rows if is_routine(r[0]) and r[-1] is not None]
     partial_in, partial_ts = 0.0, None
     if include_partial:
         routine_ts = [r[0] for r in rows if is_routine(r[0])]
         if routine_ts:
-            # Everything after the newest routine is a special; the in-progress
-            # hour is the newest one with a positive precip.
-            newer = [r for r in rows if r[0] > max(routine_ts)]
-            withp = [(r[-1], r[0]) for r in newer
-                     if r[-1] is not None and r[-1] > 0]
-            if withp:
-                partial_in, partial_ts = max(withp, key=lambda x: x[1])
+            latest = max(routine_ts)    # computed once: O(n), not O(n * n)
+            withp = [(r[-1], r[0]) for r in rows
+                     if r[0] > latest and r[-1] is not None and r[-1] > 0]
         else:
             # No routine hours in range; the newest precip-carrying report
             # stands in for the partial hour (a rough cap on it).
             withp = [(r[-1], r[0]) for r in rows
                      if r[-1] is not None and r[-1] > 0]
-            if withp:
-                partial_in, partial_ts = max(withp, key=lambda x: x[1])
+        if withp:
+            partial_in, partial_ts = max(withp, key=lambda x: x[1])
     if not vals and not partial_in:
         return 0.0, 0, (None, None), 0.0, None
     total = round(sum(v for v, _ in vals) + partial_in, 2)
